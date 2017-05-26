@@ -1,0 +1,22 @@
+{
+  "name": "purescript-codec-argonaut",
+  "homepage": "https://github.com/garyb/purescript-codec-argonaut",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/garyb/purescript-codec-argonaut.git"
+  },
+  "ignore": [
+    "**/.*",
+    "bower_components",
+    "node_modules",
+    "output",
+    "test",
+    "bower.json",
+    "package.json"
+  ],
+  "dependencies": {
+    "purescript-codec": "*",
+    "purescript-argonaut": "^3.0.0"
+  }
+}
