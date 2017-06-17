@@ -1,20 +1,17 @@
 module Control.Monad.Codec.Argonaut
-  ( JsonParseCodec
-  , JsonCodec
-  , JObjectReader
-  , JObjectBuilder
+  ( JsonCodec
   , JObjectCodec
-  , JArrayReader
-  , JArrayBuilder
   , JArrayCodec
-  , jsonParser
+  , JsonDecodeError(..)
+  , printJsonDecodeError
+  , json
   , null
   , boolean
   , number
   , string
   , jarray
   , jobject
-  , element
+  , index
   , array
   , prop
   , object
@@ -23,101 +20,162 @@ module Control.Monad.Codec.Argonaut
 
 import Prelude
 
-import Control.Monad.Codec ((<~>)) as Exports
-import Control.Monad.Codec (Codec', GCodec(..), GCodec', basicCodec, bihoistGCodec, decode, encode)
+import Control.Monad.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
+import Control.Monad.Codec (decode, encode, (~), (<~<)) as Exports
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.State (StateT(..), evalStateT)
-import Control.Monad.Writer (Writer, mapWriter, tell)
+import Control.Monad.Writer (mapWriter, tell)
 import Data.Argonaut.Core as J
-import Data.Argonaut.Parser as JP
 import Data.Array as A
 import Data.Bifunctor as BF
 import Data.Either (Either(..))
+import Data.Generic.Rep (class Generic)
+import Data.Int as I
 import Data.List as L
 import Data.Maybe (Maybe(..), maybe)
+import Data.String as S
 import Data.StrMap as SM
 import Data.Tuple (Tuple(..))
 
-type JsonParseCodec = Codec' (Either String) String J.Json
+-- | Codec type for `Json` values.
+type JsonCodec a = BasicCodec (Either JsonDecodeError) J.Json a
 
-type JsonCodec a = Codec' (Either String) J.Json a
+-- | Codec type for `JObject` prop/value pairs.
+type JObjectCodec a =
+  Codec
+    (Either JsonDecodeError)
+    J.JObject
+    (L.List J.JAssoc)
+    a a
 
-type JObjectReader = ReaderT J.JObject (Either String)
-type JObjectBuilder = Writer (L.List J.JAssoc)
-type JObjectCodec a = GCodec' JObjectReader JObjectBuilder a
+-- | Codec type for `JArray` elements.
+type JArrayCodec a =
+  Codec
+    (Either JsonDecodeError)
+    J.JArray
+    (L.List J.Json)
+    a a
 
-type JArrayReader = StateT (Tuple Int J.JArray) (Either String)
-type JArrayBuilder = Writer (L.List J.Json)
-type JArrayCodec a = GCodec' JArrayReader JArrayBuilder a
+data JsonDecodeError
+  = TypeMismatch String
+  | UnexpectedValue String
+  | AtIndex Int JsonDecodeError
+  | AtKey String JsonDecodeError
+  | Named String JsonDecodeError
+  | MissingValue
+  | SumDecodeFailed (L.List JsonDecodeError)
 
-jsonParser :: Codec' (Either String) String J.Json
-jsonParser = basicCodec JP.jsonParser J.stringify
+derive instance eqJsonDecodeError ∷ Eq JsonDecodeError
+derive instance ordJsonDecodeError ∷ Ord JsonDecodeError
+derive instance genericJsonDecodeError ∷ Generic JsonDecodeError _
 
-null :: JsonCodec J.JNull
+instance semigroupJsonDecodeError ∷ Semigroup JsonDecodeError where
+  append x y = SumDecodeFailed (x L.: y L.: L.Nil)
+
+instance showJsonDecodeError ∷ Show JsonDecodeError where
+  show = case _ of
+    TypeMismatch ty → "(TypeMismatch " <> show ty <> ")"
+    UnexpectedValue val → "(UnexpectedValue " <> show val <> ")"
+    AtIndex i err → "(AtIndex " <> show i <> " " <> show err <> ")"
+    AtKey k err → "(AtKey " <> show k <> " " <> show err <> ")"
+    Named name err → "(Named " <> show name <> " " <> show err <> ")"
+    MissingValue → "MissingValue"
+    SumDecodeFailed errs → "(SumDecodeFailed " <> show errs <> ")"
+
+printJsonDecodeError ∷ JsonDecodeError → String
+printJsonDecodeError err =
+  "An error occurred while decoding a JSON value:\n" <> go err
+  where
+    go = case _ of
+      TypeMismatch ty → "  Expected value of type '" <> ty <> "'."
+      UnexpectedValue val → "  Unexpected value '" <> val <> "'."
+      AtIndex ix inner → "  At array index " <> show ix <> ":\n" <> go inner
+      AtKey key inner → "  At object key " <> key <> ":\n" <> go inner
+      Named name inner → "  Under a '" <> name <> "':\n" <> go inner
+      MissingValue → "  No value was found."
+      SumDecodeFailed cases →
+        "  A sum type failed to decode. Case failures are as follows:\n"
+        <> S.joinWith "\n" (A.fromFoldable (go <$> cases))
+
+-- | The "identity codec" for `Json` values.
+json ∷ JsonCodec J.Json
+json = basicCodec pure id
+
+-- | A codec for `null` values in `Json`.
+null ∷ JsonCodec J.JNull
 null = jsonPrimCodec "Null" J.toNull J.fromNull
 
-boolean :: JsonCodec Boolean
+-- | A codec for `Boolean` values in `Json`.
+boolean ∷ JsonCodec Boolean
 boolean = jsonPrimCodec "Boolean" J.toBoolean J.fromBoolean
 
-number :: JsonCodec Number
+-- | A codec for `Number` values in `Json`.
+number ∷ JsonCodec Number
 number = jsonPrimCodec "Number" J.toNumber J.fromNumber
 
-string :: JsonCodec String
+-- | A codec for `Int` values in `Json`.
+int ∷ JsonCodec Int
+int = jsonPrimCodec "Int" (I.fromNumber <=< J.toNumber) (J.fromNumber <<< I.toNumber)
+
+-- | A codec for `String` values in `Json`.
+string ∷ JsonCodec String
 string = jsonPrimCodec "String" J.toString J.fromString
 
-jarray :: JsonCodec J.JArray
+-- | A codec for `Char` values in `Json`.
+char ∷ JsonCodec Char
+char = jsonPrimCodec "Char" (S.toChar <=< J.toString) (J.fromString <<< S.singleton)
+
+-- | A codec for `Void` values.
+void ∷ JsonCodec Void
+void = jsonPrimCodec "Void" (const Nothing) absurd
+
+-- | A codec for an `Array` values in `Json`.
+jarray ∷ JsonCodec J.JArray
 jarray = jsonPrimCodec "Array" J.toArray J.fromArray
 
-jobject :: JsonCodec J.JObject
+-- | A codec for `Object` values in `Json`.
+jobject ∷ JsonCodec J.JObject
 jobject = jsonPrimCodec "Object" J.toObject J.fromObject
 
-element :: forall a. String -> JsonCodec a -> JArrayCodec a
-element key codec = GCodec dec enc
+index ∷ ∀ a. Int → JsonCodec a → JArrayCodec a
+index ix codec = GCodec dec enc
   where
-  dec :: JArrayReader a
-  dec = StateT \(Tuple ix xs) ->
-    case A.index xs ix of
-      Just val -> flip Tuple (Tuple (ix + 1) xs) <$> decode codec val
-      Nothing -> Left ("Expected an array element at index " <> show ix)
-  enc :: a -> JArrayBuilder a
+  dec = ReaderT \xs →
+    BF.lmap (AtIndex ix) case A.index xs ix of
+      Just val → decode codec val
+      Nothing → Left MissingValue
   enc val = do
     tell (pure (encode codec val))
     pure val
 
-array :: forall a. String -> JArrayCodec a -> JsonCodec a
-array name = bihoistGCodec dec enc
-  where
-  dec :: JArrayReader ~> ReaderT J.Json (Either String)
-  dec r = ReaderT (evalStateT r <<< Tuple 0 <=< decode jarray)
-  enc :: JArrayBuilder ~> Writer J.Json
-  enc = mapWriter (BF.rmap (encode jarray <<< A.fromFoldable))
+array ∷ ∀ a. String → JArrayCodec a → JsonCodec a
+array name =
+  bihoistGCodec
+    (\r → ReaderT (runReaderT r <=< decode jarray))
+    (mapWriter (BF.rmap (encode jarray <<< A.fromFoldable)))
 
-prop :: forall a. String -> JsonCodec a -> JObjectCodec a
+prop ∷ ∀ a. String → JsonCodec a → JObjectCodec a
 prop key codec = GCodec dec enc
   where
-  dec :: JObjectReader a
-  dec = ReaderT \obj ->
-    case SM.lookup key obj of
-      Nothing -> Left ("Expected field '" <> key <> "'")
-      Just val -> decode codec val
-  enc :: a -> JObjectBuilder a
+  dec ∷ ReaderT J.JObject (Either JsonDecodeError) a
+  dec = ReaderT \obj →
+    BF.lmap (AtKey key) case SM.lookup key obj of
+      Just val → decode codec val
+      Nothing → Left MissingValue
   enc val = do
     tell (pure (Tuple key (encode codec val)))
     pure val
 
-object :: forall a. String -> JObjectCodec a -> JsonCodec a
-object name = bihoistGCodec dec enc
-  where
-  dec :: JObjectReader ~> ReaderT J.Json (Either String)
-  dec r = ReaderT (runReaderT r <=< decode jobject)
-  enc :: JObjectBuilder ~> Writer J.Json
-  enc = mapWriter (BF.rmap (encode jobject <<< SM.fromFoldable))
+object ∷ ∀ a. String → JObjectCodec a → JsonCodec a
+object name =
+  bihoistGCodec
+    (\r → ReaderT (runReaderT r <=< decode jobject))
+    (mapWriter (BF.rmap (encode jobject <<< SM.fromFoldable)))
 
 jsonPrimCodec
-  :: forall a
+  ∷ ∀ a
    . String
-  -> (J.Json -> Maybe a)
-  -> (a -> J.Json)
-  -> JsonCodec a
+  → (J.Json → Maybe a)
+  → (a → J.Json)
+  → JsonCodec a
 jsonPrimCodec ty f =
-  basicCodec (maybe (Left ("Expected value of type '" <> ty <> "'")) Right <<< f)
+  basicCodec (maybe (Left (TypeMismatch ty)) pure <<< f)
