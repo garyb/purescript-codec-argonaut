@@ -17,7 +17,7 @@
   ],
   "dependencies": {
     "purescript-argonaut-core": "^3.1.0",
-    "purescript-codec": "*",
+    "purescript-codec": "^1.0.0",
     "purescript-generics-rep": "^5.1.0"
   },
   "devDependencies": {
