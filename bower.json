@@ -16,7 +16,12 @@
     "package.json"
   ],
   "dependencies": {
+    "purescript-argonaut-core": "^3.1.0",
     "purescript-codec": "*",
-    "purescript-argonaut": "^3.0.0"
+    "purescript-generics-rep": "^5.1.0"
+  },
+  "devDependencies": {
+    "purescript-argonaut-codecs": "^3.1.0",
+    "purescript-quickcheck": "^4.4.0"
   }
 }
