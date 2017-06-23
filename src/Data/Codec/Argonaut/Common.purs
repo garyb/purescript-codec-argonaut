@@ -1,16 +1,16 @@
-module Control.Monad.Codec.Argonaut.Common
-  ( module Control.Monad.Codec.Argonaut.Common
-  , module Control.Monad.Codec.Argonaut
+module Data.Codec.Argonaut.Common
+  ( module Data.Codec.Argonaut.Common
+  , module Data.Codec.Argonaut
   ) where
 
 import Prelude hiding (map)
 
-import Control.Monad.Codec (basicCodec)
-import Control.Monad.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, string, (<~<), (~))
-import Control.Monad.Codec.Argonaut.Sum (Tag(..), taggedSum)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
+import Data.Codec (basicCodec)
+import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, string, (<~<), (~))
+import Data.Codec.Argonaut.Sum (Tag(..), taggedSum)
 import Data.Either (Either(..))
 import Data.List as L
 import Data.Map as M

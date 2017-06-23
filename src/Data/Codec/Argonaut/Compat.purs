@@ -1,17 +1,17 @@
 -- | Codecs that are compatible with `purescript-argonaut-codecs`.
-module Control.Monad.Codec.Argonaut.Compat
-  ( module Control.Monad.Codec.Argonaut.Compat
-  , module Control.Monad.Codec.Argonaut
+module Data.Codec.Argonaut.Compat
+  ( module Data.Codec.Argonaut.Compat
+  , module Data.Codec.Argonaut
   , module Common
   ) where
 
 import Prelude
 
-import Control.Monad.Codec (basicCodec, mapCodec)
-import Control.Monad.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, string, (<~<), (~))
-import Control.Monad.Codec.Argonaut.Common (either, list, map, tuple) as Common
 import Data.Argonaut.Core as J
 import Data.Bifunctor as BF
+import Data.Codec (basicCodec, mapCodec)
+import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, string, (<~<), (~))
+import Data.Codec.Argonaut.Common (either, list, map, tuple) as Common
 import Data.Either (Either)
 import Data.Functor as F
 import Data.Maybe (Maybe(..))

@@ -2,12 +2,12 @@ module Test.Prim where
 
 import Prelude
 
-import Control.Monad.Codec.Argonaut.Common as JA
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen as Gen
 import Data.Argonaut.Core as J
 import Data.Argonaut.Gen (genJson)
 import Data.Char.Gen (genAsciiChar)
+import Data.Codec.Argonaut.Common as JA
 import Data.String.Gen (genAsciiString)
 import Data.StrMap.Gen (genStrMap)
 import Test.QuickCheck (QC, Result, quickCheck)

@@ -2,8 +2,8 @@ module Test.Util where
 
 import Prelude
 
-import Control.Monad.Codec.Argonaut.Common as JA
 import Control.Monad.Gen as Gen
+import Data.Codec.Argonaut.Common as JA
 import Data.Either (Either(..))
 import Test.QuickCheck (Result, (===))
 import Test.QuickCheck.Gen (Gen)
