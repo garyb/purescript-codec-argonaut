@@ -1,4 +1,4 @@
-module Control.Monad.Codec.Argonaut
+module Data.Codec.Argonaut
   ( JsonCodec
   , JsonDecodeError(..)
   , printJsonDecodeError
@@ -23,23 +23,23 @@ module Control.Monad.Codec.Argonaut
 
 import Prelude
 
-import Control.Monad.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
-import Control.Monad.Codec (decode, encode, (~), (<~<)) as Exports
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Writer (writer, mapWriter)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
+import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
+import Data.Codec (decode, encode, (~), (<~<)) as Exports
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int as I
 import Data.List as L
 import Data.Maybe (Maybe(..), maybe)
+import Data.Profunctor.Star (Star(..))
 import Data.String as S
 import Data.StrMap as SM
 import Data.Traversable (traverse)
-import Data.Profunctor.Star (Star(..))
 import Data.Tuple (Tuple(..))
 
 -- | Codec type for `Json` values.

@@ -1,21 +1,21 @@
-module Control.Monad.Codec.Argonaut.Sum
+module Data.Codec.Argonaut.Sum
   ( Tag(..)
   , taggedSum
   ) where
 
 import Prelude
 
-import Control.Monad.Codec (GCodec(..), decode, encode)
-import Control.Monad.Codec.Argonaut (JsonCodec, JsonDecodeError, jobject, json, prop, string)
 import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Writer (Writer, writer)
 import Data.Argonaut.Core as J
+import Data.Codec (GCodec(..), decode, encode)
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError, jobject, json, prop, string)
 import Data.Either as E
+import Data.Newtype (class Newtype)
+import Data.Profunctor.Star (Star(..))
 import Data.StrMap as SM
 import Data.StrMap.ST as SMST
-import Data.Profunctor.Star (Star(..))
 import Data.Tuple (Tuple(..))
-import Data.Newtype (class Newtype)
 
 -- | A tag value for a case in a sum type.
 newtype Tag = Tag String

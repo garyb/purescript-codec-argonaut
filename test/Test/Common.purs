@@ -2,10 +2,10 @@ module Test.Common where
 
 import Prelude
 
-import Control.Monad.Codec.Argonaut.Common as JA
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
+import Data.Codec.Argonaut.Common as JA
 import Data.Map.Gen (genMap)
 import Data.String.Gen (genAsciiString)
 import Data.StrMap.Gen (genStrMap)

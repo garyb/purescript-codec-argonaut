@@ -2,11 +2,11 @@ module Test.Compat where
 
 import Prelude
 
-import Control.Monad.Codec.Argonaut.Compat as JA
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen.Common as GenC
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
+import Data.Codec.Argonaut.Compat as JA
 import Data.Either (Either(..))
 import Data.String.Gen (genAsciiString)
 import Data.StrMap.Gen (genStrMap)
