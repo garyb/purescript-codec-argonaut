@@ -9,7 +9,7 @@ import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
 import Data.Codec (basicCodec)
-import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, string, (<~<), (~))
+import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, string, (<~<), (~))
 import Data.Codec.Argonaut.Sum (Tag(..), taggedSum)
 import Data.Either (Either(..))
 import Data.List as L

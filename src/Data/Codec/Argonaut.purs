@@ -18,13 +18,15 @@ module Data.Codec.Argonaut
   , JPropCodec
   , object
   , prop
+  , record
+  , recordProp
   , module Exports
   ) where
 
 import Prelude
 
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.Writer (writer, mapWriter)
+import Control.Monad.Writer (Writer, writer, mapWriter)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
@@ -34,13 +36,17 @@ import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int as I
+import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), maybe, fromJust)
 import Data.Profunctor.Star (Star(..))
 import Data.String as S
 import Data.StrMap as SM
+import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
+import Partial.Unsafe (unsafePartial)
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | Codec type for `Json` values.
 type JsonCodec a = BasicCodec (Either JsonDecodeError) J.Json a
@@ -175,7 +181,54 @@ prop key codec = GCodec dec enc
     BF.lmap (AtKey key) case SM.lookup key obj of
       Just val → decode codec val
       Nothing → Left MissingValue
+  enc ∷ Star (Writer (L.List J.JAssoc)) a a
   enc = Star \val → writer $ Tuple val (pure (Tuple key (encode codec val)))
+
+-- | The starting value for a object-record codec. Used with `recordProp` it
+-- | provides a convenient method for defining codecs for record types that
+-- | encode into JSON objects of the same shape.
+-- |
+-- | For example:
+-- | ```
+-- | myRecordCodec =
+-- |   object "MyRecord" $ record
+-- |     # recordProp (SProxy :: SProxy "tag") tagCodec
+-- |     # recordProp (SProxy :: SProxy "value") valueCodec
+-- | ```
+record ∷ JPropCodec {}
+record = GCodec (pure {}) (Star \val → writer (Tuple val L.Nil))
+
+-- | Used with `record` to define codecs for record types that encode into JSON
+-- | objects of the same shape. See the comment on `record` for an example.
+recordProp
+  ∷ ∀ p a r r'
+  . IsSymbol p
+  ⇒ RowCons p a r r'
+  ⇒ SProxy p
+  → JsonCodec a
+  → JPropCodec (Record r)
+  → JPropCodec (Record r')
+recordProp p codecA codecR =
+  let key = reflectSymbol p in GCodec (dec' key) (enc' key)
+  where
+    dec' ∷ String → ReaderT J.JObject (Either JsonDecodeError) (Record r')
+    dec' key = ReaderT \obj → do
+      r ← decode codecR obj
+      a ← BF.lmap (AtKey key) case SM.lookup key obj of
+        Just val → decode codecA val
+        Nothing → Left MissingValue
+      pure $ unsafeSet key a r
+    enc' ∷ String → Star (Writer (L.List J.JAssoc)) (Record r') (Record r')
+    enc' key = Star \val →
+      writer $ Tuple val
+        $ Tuple key (encode codecA (unsafeGet key val))
+        : encode codecR (unsafeForget val)
+    unsafeForget ∷ Record r' → Record r
+    unsafeForget = unsafeCoerce
+    unsafeSet ∷ String → a → Record r → Record r'
+    unsafeSet key a = unsafeCoerce <<< SM.insert key a <<< unsafeCoerce
+    unsafeGet ∷ String → Record r' → a
+    unsafeGet s = unsafePartial fromJust <<< SM.lookup s <<< unsafeCoerce
 
 jsonPrimCodec
   ∷ ∀ a
