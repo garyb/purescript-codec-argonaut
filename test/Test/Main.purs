@@ -5,6 +5,7 @@ import Prelude
 import Control.Monad.Eff.Console (log)
 import Test.Common as Common
 import Test.Compat as Compat
+import Test.Migration as Migration
 import Test.Prim as Prim
 import Test.QuickCheck (QC)
 import Test.Variant as Variant
@@ -26,3 +27,7 @@ main = do
   log "Checking Variant codecs"
   log "------------------------------------------------------------"
   Variant.main
+  log ""
+  log "Checking Migration codecs"
+  log "------------------------------------------------------------"
+  Migration.main

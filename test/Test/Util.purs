@@ -3,8 +3,12 @@ module Test.Util where
 import Prelude
 
 import Control.Monad.Gen as Gen
+import Data.Argonaut.Core as J
+import Data.Argonaut.Gen as GenJ
 import Data.Codec.Argonaut.Common as JA
 import Data.Either (Either(..))
+import Data.String.Gen (genAsciiString)
+import Data.StrMap.Gen as SMG
 import Test.QuickCheck (Result(..), (<?>))
 import Test.QuickCheck.Gen (Gen)
 
@@ -23,3 +27,6 @@ propCodec = propCodec' eq show
 
 genInt ∷ Gen Int
 genInt = Gen.chooseInt (-100000) 100000
+
+genJObject ∷ Gen J.JObject
+genJObject = SMG.genStrMap genAsciiString GenJ.genJson
