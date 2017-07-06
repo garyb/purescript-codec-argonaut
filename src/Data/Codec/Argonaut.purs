@@ -54,7 +54,7 @@ type JsonCodec a = BasicCodec (Either JsonDecodeError) J.Json a
 -- | Error type for failures while decoding.
 data JsonDecodeError
   = TypeMismatch String
-  | UnexpectedValue String
+  | UnexpectedValue J.Json
   | AtIndex Int JsonDecodeError
   | AtKey String JsonDecodeError
   | Named String JsonDecodeError
@@ -74,7 +74,7 @@ printJsonDecodeError err =
   where
     go = case _ of
       TypeMismatch ty → "  Expected value of type '" <> ty <> "'."
-      UnexpectedValue val → "  Unexpected value '" <> val <> "'."
+      UnexpectedValue val → "  Unexpected value " <> J.stringify val <> "."
       AtIndex ix inner → "  At array index " <> show ix <> ":\n" <> go inner
       AtKey key inner → "  At object key " <> key <> ":\n" <> go inner
       Named name inner → "  Under '" <> name <> "':\n" <> go inner
