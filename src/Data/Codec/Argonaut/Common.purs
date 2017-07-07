@@ -5,40 +5,35 @@ module Data.Codec.Argonaut.Common
 
 import Prelude hiding (map)
 
-import Data.Argonaut.Core as J
 import Data.Array as A
-import Data.Bifunctor as BF
-import Data.Codec (basicCodec)
 import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, string, (<~<), (~))
-import Data.Codec.Argonaut.Sum (Tag(..), taggedSum)
+import Data.Codec.Argonaut.Sum (taggedSum)
 import Data.Either (Either(..))
+import Data.Functor as F
 import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (dimap)
 import Data.StrMap as SM
-import Data.StrMap.ST as SMST
 import Data.Tuple (Tuple(..), fst, snd)
 
 -- | A codec for `Maybe` values.
 maybe ∷ ∀ a. JsonCodec a → JsonCodec (Maybe a)
-maybe codec = basicCodec dec enc
+maybe codec = taggedSum "Maybe" printTag parseTag dec enc
   where
-  dec j = do
-    obj ← decode jobject j
-    tag ← decode (prop "tag" string) obj
-    case tag of
-      "Just" → Just <$> decode (prop "value" codec) obj
-      "Nothing" → pure Nothing
-      _ → Left (AtKey "tag" (UnexpectedValue (J.fromString tag)))
-  enc x = encode jobject $ SM.pureST do
-    obj ← SMST.new
-    case x of
-      Nothing →
-        SMST.poke obj "tag" (J.fromString "Nothing")
-      Just a → do
-        _ ← SMST.poke obj "tag" (J.fromString "Just")
-        SMST.poke obj "value" (encode codec a)
+  printTag = case _ of
+    false → "Nothing"
+    true → "Just"
+  parseTag = case _ of
+    "Nothing" → Just false
+    "Just" → Just true
+    _ → Nothing
+  dec = case _ of
+    false → Left Nothing
+    true → Right (F.map Just <<< decode codec)
+  enc = case _ of
+    Nothing → Tuple false Nothing
+    Just a → Tuple true (Just (encode codec a))
 
 -- | A codec for `Tuple` values.
 -- |
@@ -51,15 +46,21 @@ tuple codecA codecB = indexedArray "Tuple" $
 
 -- | A codec for `Either` values.
 either ∷ ∀ a b. JsonCodec a → JsonCodec b → JsonCodec (Either a b)
-either codecA codecB = taggedSum dec enc
+either codecA codecB = taggedSum "Either" printTag parseTag dec enc
   where
-  dec tag json = case tag of
-    Tag "Left" → BF.bimap (AtKey "value") Left (decode codecA json)
-    Tag "Right" → BF.bimap (AtKey "value") Right (decode codecB json)
-    Tag t → Left (AtKey "tag" (UnexpectedValue (J.fromString t)))
+  printTag = case _ of
+    true → "Left"
+    false → "Right"
+  parseTag = case _ of
+    "Left" → Just true
+    "Right" → Just false
+    _ → Nothing
+  dec = case _ of
+    true → Right (F.map Left <<< decode codecA)
+    false → Right (F.map Right <<< decode codecB)
   enc = case _ of
-    Left a → Tuple (Tag "Left") (encode codecA a)
-    Right b → Tuple (Tag "Right") (encode codecB b)
+    Left a → Tuple true (Just (encode codecA a))
+    Right b → Tuple false (Just (encode codecB b))
 
 -- | A codec for `List` values.
 -- |

@@ -1,5 +1,5 @@
 module Data.Codec.Argonaut.Sum
-  ( Tag(..)
+  ( enumSum
   , taggedSum
   ) where
 
@@ -8,52 +8,73 @@ import Prelude
 import Control.Monad.Reader (ReaderT(..))
 import Control.Monad.Writer (Writer, writer)
 import Data.Argonaut.Core as J
+import Data.Bifunctor (lmap)
 import Data.Codec (GCodec(..), decode, encode)
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError, jobject, json, prop, string)
-import Data.Either as E
-import Data.Newtype (class Newtype)
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), jobject, json, prop, string)
+import Data.Either (Either(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.Profunctor.Star (Star(..))
 import Data.StrMap as SM
 import Data.StrMap.ST as SMST
 import Data.Tuple (Tuple(..))
 
--- | A tag value for a case in a sum type.
-newtype Tag = Tag String
-
-derive newtype instance eqTag ∷ Eq Tag
-derive newtype instance ordTag ∷ Ord Tag
-derive instance newtypeTag ∷ Newtype Tag _
-
--- | A helper for defining JSON codecs for sum types.
--- |
--- | - The first function attempts to decode a case, using the specified tag.
--- | - The second function encodes a case, returning an appropriate tag and
--- |   encoded value.
-taggedSum
+-- | A helper for defining JSON codecs for "enum" sum types, where every
+-- | constructor is nullary, and the type will be encoded as a string.
+enumSum
   ∷ ∀ a
-  . (Tag → J.Json → E.Either JsonDecodeError a)
-  → (a → Tuple Tag J.Json)
+  . (a → String)
+  → (String → Maybe a)
   → JsonCodec a
-taggedSum f g = GCodec (decodeCase f) (encodeCase g)
+enumSum printTag parseTag = GCodec dec enc
+  where
+  dec ∷ ReaderT J.Json (Either JsonDecodeError) a
+  dec = ReaderT \j → do
+    value ← decode string j
+    case parseTag value of
+      Just a → Right a
+      Nothing → Left (UnexpectedValue j)
+  enc ∷ Star (Writer J.Json) a a
+  enc = Star \a → writer $ Tuple a (encode string (printTag a))
 
-decodeCase
-  ∷ ∀ a
-  . (Tag → J.Json → E.Either JsonDecodeError a)
-  → ReaderT J.Json (E.Either JsonDecodeError) a
-decodeCase f = ReaderT \j → do
-  obj ← decode jobject j
-  tag ← decode (prop "tag" string) obj
-  value ← decode (prop "value" json) obj
-  f (Tag tag) value
-
-encodeCase
-  ∷ ∀ a
-  . (a → Tuple Tag J.Json)
-  → Star (Writer J.Json) a a
-encodeCase f = Star case _ of
-  a | Tuple (Tag tag) value ← f a →
-    writer $ Tuple a $ encode jobject $
-      SM.pureST do
-        obj ← SMST.new
-        _ ← SMST.poke obj "tag" (encode string tag)
-        SMST.poke obj "value" value
+-- | A helper for defining JSON codecs for sum types. To ensure exhaustivity
+-- | there needs to be a mapping to and from a tag type for the type to be
+-- | encoded.
+-- |
+-- | - The first argument is the name of the type being decoded, for error
+-- |   message purposes.
+-- | - The second argument maps a tag value to a string to use in the encoding.
+-- | - The second argument maps a string back to a tag value during decoding.
+-- | - The third argument returns either a constant value or a decoder function
+-- |   based on a tag value.
+-- | - The fourth argument returns a tag value and optional encoded value to
+-- |   store for a constructor of the sum.
+taggedSum
+  ∷ ∀ tag a
+  . String
+  → (tag → String)
+  → (String → Maybe tag)
+  → (tag → Either a (J.Json → Either JsonDecodeError a))
+  → (a → Tuple tag (Maybe J.Json))
+  → JsonCodec a
+taggedSum name printTag parseTag f g = GCodec decodeCase encodeCase
+  where
+  decodeCase ∷ ReaderT J.Json (Either JsonDecodeError) a
+  decodeCase = ReaderT \j → lmap (Named name) do
+    obj ← decode jobject j
+    tag ← decode (prop "tag" string) obj
+    case parseTag tag of
+      Nothing → Left (AtKey "tag" (UnexpectedValue (J.fromString tag)))
+      Just t →
+        case f t of
+          Left a → pure a
+          Right decoder → do
+            value ← decode (prop "value" json) obj
+            lmap (AtKey "value") (decoder value)
+  encodeCase ∷ Star (Writer J.Json) a a
+  encodeCase = Star case _ of
+    a | Tuple tag value ← g a →
+      writer $ Tuple a $ encode jobject $
+        SM.pureST do
+          obj ← SMST.new
+          _ ← SMST.poke obj "tag" (encode string (printTag tag))
+          maybe (pure obj) (SMST.poke obj "value") value
