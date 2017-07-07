@@ -3,10 +3,12 @@ module Test.Main where
 import Prelude
 
 import Control.Monad.Eff.Console (log)
-import Test.Prim as Prim
 import Test.Common as Common
 import Test.Compat as Compat
+import Test.Migration as Migration
+import Test.Prim as Prim
 import Test.QuickCheck (QC)
+import Test.Variant as Variant
 
 main :: QC () Unit
 main = do
@@ -21,3 +23,11 @@ main = do
   log "Checking Compat codecs"
   log "------------------------------------------------------------"
   Compat.main
+  log ""
+  log "Checking Variant codecs"
+  log "------------------------------------------------------------"
+  Variant.main
+  log ""
+  log "Checking Migration codecs"
+  log "------------------------------------------------------------"
+  Migration.main

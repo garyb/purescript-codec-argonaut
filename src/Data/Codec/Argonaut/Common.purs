@@ -30,7 +30,7 @@ maybe codec = basicCodec dec enc
     case tag of
       "Just" → Just <$> decode (prop "value" codec) obj
       "Nothing" → pure Nothing
-      _ → Left (AtKey "tag" (UnexpectedValue tag))
+      _ → Left (AtKey "tag" (UnexpectedValue (J.fromString tag)))
   enc x = encode jobject $ SM.pureST do
     obj ← SMST.new
     case x of
@@ -56,7 +56,7 @@ either codecA codecB = taggedSum dec enc
   dec tag json = case tag of
     Tag "Left" → BF.bimap (AtKey "value") Left (decode codecA json)
     Tag "Right" → BF.bimap (AtKey "value") Right (decode codecB json)
-    Tag t → Left (AtKey "tag" (UnexpectedValue t))
+    Tag t → Left (AtKey "tag" (UnexpectedValue (J.fromString t)))
   enc = case _ of
     Left a → Tuple (Tag "Left") (encode codecA a)
     Right b → Tuple (Tag "Right") (encode codecB b)
