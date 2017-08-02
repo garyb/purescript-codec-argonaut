@@ -8,7 +8,7 @@ import Data.Codec ((<~<))
 import Data.Codec.Argonaut.Common as JA
 import Data.Codec.Argonaut.Migration as JAM
 import Data.Either (Either(..))
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.String.Gen (genAsciiString)
 import Data.StrMap as SM
 import Test.QuickCheck (Result(..), QC, quickCheck, (===))
@@ -22,6 +22,15 @@ main = do
 
   log "Checking addDefaultField preserves an existing value if it's already present"
   quickCheck propDefaultFieldPreservesOriginal
+
+  log "Checking updateField updates an existing value if it's already present"
+  quickCheck propUpdateFieldAltersOriginal
+
+  log "Checking addDefaultOrUpdateField adds a field if it is missing"
+  quickCheck propAddDefaultOrUpdateField
+
+  log "Checking addDefaultOrUpdateField updates an existing value if it's already present"
+  quickCheck propAddDefaultOrUpdateFieldAltersOriginal
 
   log "Checking renameField renames a field"
   quickCheck propDefaultFieldPreservesOriginal
@@ -42,6 +51,32 @@ propDefaultFieldPreservesOriginal = do
   input ← SM.insert missingKey expectedValue <$> genJObject
   pure $ testMigrationCodec { key: missingKey, expectedValue, input }
     $ JA.jobject <~< JAM.addDefaultField missingKey unexpectedValue
+
+propUpdateFieldAltersOriginal ∷ Gen Result
+propUpdateFieldAltersOriginal = do
+  let expectedValue = J.fromString "it's here"
+  let unexpectedValue = J.fromString "it shouldn't be here"
+  updateKey ← genAsciiString
+  input ← SM.insert updateKey unexpectedValue <$> genJObject
+  pure $ testMigrationCodec { key: updateKey, expectedValue, input }
+    $ JA.jobject <~< JAM.updateField updateKey (const expectedValue)
+
+propAddDefaultOrUpdateField ∷ Gen Result
+propAddDefaultOrUpdateField = do
+  let expectedValue = J.fromString "it's here"
+  missingKey ← genAsciiString
+  input ← SM.delete missingKey <$> genJObject
+  pure $ testMigrationCodec { key: missingKey, expectedValue, input }
+    $ JA.jobject <~< JAM.addDefaultOrUpdateField missingKey (fromMaybe expectedValue)
+
+propAddDefaultOrUpdateFieldAltersOriginal ∷ Gen Result
+propAddDefaultOrUpdateFieldAltersOriginal = do
+  let expectedValue = J.fromString "it's here"
+  let unexpectedValue = J.fromString "it shouldn't be here"
+  updateKey ← genAsciiString
+  input ← SM.insert updateKey unexpectedValue <$> genJObject
+  pure $ testMigrationCodec { key: updateKey, expectedValue, input }
+    $ JA.jobject <~< JAM.addDefaultOrUpdateField updateKey (maybe unexpectedValue (const expectedValue))
 
 propRenameField ∷ Gen Result
 propRenameField = do
