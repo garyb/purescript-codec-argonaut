@@ -9,6 +9,7 @@ import Test.Migration as Migration
 import Test.Prim as Prim
 import Test.QuickCheck (QC)
 import Test.Variant as Variant
+import Test.Record as Record
 
 main :: QC () Unit
 main = do
@@ -27,6 +28,10 @@ main = do
   log "Checking Variant codecs"
   log "------------------------------------------------------------"
   Variant.main
+  log ""
+  log "Checking Record codecs"
+  log "------------------------------------------------------------"
+  Record.main
   log ""
   log "Checking Migration codecs"
   log "------------------------------------------------------------"
