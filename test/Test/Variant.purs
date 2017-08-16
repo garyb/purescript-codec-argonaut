@@ -3,6 +3,7 @@ module Test.Variant where
 import Prelude
 
 import Control.Monad.Eff.Console (log)
+import Control.Monad.Gen (chooseBool, chooseInt)
 import Control.Monad.Gen.Common as GenC
 import Data.Codec.Argonaut.Common as JA
 import Data.Codec.Argonaut.Variant as JAV
@@ -13,7 +14,14 @@ import Data.String.Gen (genAsciiString)
 import Data.Symbol (SProxy(..))
 import Data.Variant as V
 import Test.QuickCheck (QC, quickCheck)
+import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
+
+type TestVariant = V.Variant
+  ( a ∷ Int
+  , b ∷ String
+  , c ∷ Maybe Boolean
+  )
 
 main :: QC () Unit
 main = do
@@ -28,6 +36,10 @@ main = do
     propCodec
       (GenC.genEither genAsciiString genInt)
       (codecEither JA.string JA.int)
+
+  log "Checking variant codec"
+  quickCheck $
+    propCodec genVariant codecVariant
 
 codecMaybe ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
 codecMaybe codecA =
@@ -60,3 +72,18 @@ codecEither codecA codecB =
     # V.on _Right Right
   _Left = SProxy ∷ SProxy "left"
   _Right = SProxy ∷ SProxy "right"
+
+genVariant ∷ Gen TestVariant
+genVariant = do
+  tag ← chooseInt 1 3
+  case tag of
+    1 → V.inj (SProxy ∷ SProxy "a") <$> genInt
+    2 → V.inj (SProxy ∷ SProxy "b") <$> genAsciiString
+    _ → V.inj (SProxy ∷ SProxy "c") <$> GenC.genMaybe chooseBool
+
+codecVariant ∷ JA.JsonCodec TestVariant
+codecVariant = JAV.variantMatch
+  { a: Right JA.int
+  , b: Right JA.string
+  , c: Right (JA.maybe JA.boolean)
+  }
