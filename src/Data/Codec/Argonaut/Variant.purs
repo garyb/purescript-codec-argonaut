@@ -10,11 +10,14 @@ import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), decode, encode, jobj
 import Data.Either (Either(..))
 import Data.Newtype (un)
 import Data.Profunctor.Star (Star(..))
+import Data.Record as Rec
 import Data.StrMap as SM
 import Data.StrMap.ST as SMST
-import Data.Symbol (class IsSymbol, reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol, SProxy(..))
 import Data.Tuple (Tuple(..))
 import Data.Variant (SProxy, Variant, case_, inj, on)
+import Type.Equality as TE
+import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
 
 variant ∷ JsonCodec (Variant ())
@@ -57,3 +60,33 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
 
   coerceR ∷ Variant r → Variant r'
   coerceR = unsafeCoerce
+
+class VariantCodec (rl ∷ R.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
+  variantCodec ∷ R.RLProxy rl → Record ri → JsonCodec (Variant ro)
+
+instance variantCodecNil ∷ VariantCodec R.Nil () () where
+  variantCodec _ _ = variant
+
+instance variantCodecCons ∷
+  ( VariantCodec rs ri' ro'
+  , RowCons sym (Either a (JsonCodec a)) ri' ri
+  , RowCons sym a ro' ro
+  , IsSymbol sym
+  , TE.TypeEquals co (Either a (JsonCodec a))
+  ) ⇒ VariantCodec (R.Cons sym co rs) ri ro where
+  variantCodec _ codecs =
+    variantCase (SProxy ∷ SProxy sym) codec tail
+    where
+    codec ∷ Either a (JsonCodec a)
+    codec = TE.from (Rec.get (SProxy ∷ SProxy sym) codecs)
+
+    tail ∷ JsonCodec (Variant ro')
+    tail = variantCodec (R.RLProxy ∷ R.RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
+
+variantMatch
+  ∷ ∀ rl ri ro
+  . R.RowToList ri rl
+  ⇒ VariantCodec rl ri ro
+  ⇒ Record ri
+  → JsonCodec (Variant ro)
+variantMatch = variantCodec (R.RLProxy ∷ R.RLProxy rl)
