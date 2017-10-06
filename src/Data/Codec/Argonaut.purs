@@ -21,6 +21,7 @@ module Data.Codec.Argonaut
   , record
   , recordProp
   , fix
+  , prismaticCodec
   , module Exports
   ) where
 
@@ -33,7 +34,7 @@ import Data.Array as A
 import Data.Bifunctor as BF
 import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
 import Data.Codec (decode, encode, (~), (<~<)) as Exports
-import Data.Either (Either(..))
+import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Generic.Rep.Show (genericShow)
 import Data.Int as I
@@ -41,8 +42,8 @@ import Data.List ((:))
 import Data.List as L
 import Data.Maybe (Maybe(..), maybe, fromJust)
 import Data.Profunctor.Star (Star(..))
-import Data.String as S
 import Data.StrMap as SM
+import Data.String as S
 import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
@@ -246,3 +247,15 @@ fix f =
   basicCodec
     (\x → decode (f (fix f)) x)
     (\x → encode (f (fix f)) x)
+
+-- | Adapts an existing codec with a pair of functions to allow a value to be
+-- | further refined. If the inner decoder fails an `UnexpectedValue` error will
+-- | be raised for JSON input.
+-- |
+-- | This function is named as such as the pair of functions it accepts
+-- | correspond with the `preview` and `view` functions of a `Prism`-style lens.
+prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
+prismaticCodec f g orig =
+  basicCodec
+    (\json → note (UnexpectedValue json) <<< f =<< (decode orig json))
+    (encode orig <<< g)
