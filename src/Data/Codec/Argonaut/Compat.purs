@@ -10,7 +10,7 @@ import Prelude
 import Data.Argonaut.Core as J
 import Data.Bifunctor as BF
 import Data.Codec (basicCodec, mapCodec)
-import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, string, (<~<), (~))
+import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, string, (<~<), (~))
 import Data.Codec.Argonaut.Common (either, list, map, tuple) as Common
 import Data.Either (Either)
 import Data.Functor as F
