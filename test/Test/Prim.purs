@@ -4,13 +4,19 @@ import Prelude
 
 import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen as Gen
+import Control.Monad.Gen.Common as GenC
 import Data.Argonaut.Core as J
 import Data.Argonaut.Gen (genJson)
 import Data.Char.Gen (genAsciiChar)
 import Data.Codec.Argonaut.Common ((~))
 import Data.Codec.Argonaut.Common as JA
-import Data.String.Gen (genAsciiString)
+import Data.Generic.Rep (class Generic)
+import Data.Generic.Rep.Show (genericShow)
+import Data.Maybe (Maybe(..))
+import Data.Newtype (class Newtype, unwrap, wrap)
+import Data.Profunctor (dimap)
 import Data.StrMap.Gen (genStrMap)
+import Data.String.Gen (genAsciiString)
 import Data.Symbol (SProxy(..))
 import Test.QuickCheck (QC, Result, quickCheck)
 import Test.QuickCheck.Gen (Gen)
@@ -47,6 +53,9 @@ main = do
 
   log "Checking record codec"
   quickCheck (propTestRecord codecRecord)
+
+  log "Checking fixed-point codec"
+  quickCheck propFix
 
 propNull ∷ Gen Result
 propNull = propCodec (pure J.jNull) JA.null
@@ -102,3 +111,23 @@ propTestRecord = propCodec' checkEq print genRecord
   checkEq r1 r2 = r1.tag == r2.tag && r1.x == r2.x && r1.y == r2.y
   print { tag, x, y } =
     "{ tag: " <> show tag <> ", x: " <> show x <> ", y: " <> show y <> " }"
+
+newtype FixTest = FixTest (Maybe FixTest)
+
+derive instance newtypeFixTest ∷ Newtype FixTest _
+derive instance genericFixTest ∷ Generic FixTest _
+instance eqFixTest ∷ Eq FixTest where eq (FixTest x) (FixTest y) = x == y
+instance showFixTest ∷ Show FixTest where show x = genericShow x
+
+genFixTest ∷ Gen FixTest
+genFixTest = Gen.sized \n →
+  if n <= 1
+  then pure $ FixTest Nothing
+  else FixTest <$> Gen.resize (_ - 1) (GenC.genMaybe genFixTest)
+
+codecFixTest ∷ JA.JsonCodec FixTest
+codecFixTest = JA.fix \codec →
+  dimap unwrap wrap (JA.maybe codec)
+
+propFix ∷ Gen Result
+propFix = propCodec genFixTest codecFixTest

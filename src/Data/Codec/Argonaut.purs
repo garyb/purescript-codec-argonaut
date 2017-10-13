@@ -20,6 +20,7 @@ module Data.Codec.Argonaut
   , prop
   , record
   , recordProp
+  , fix
   , module Exports
   ) where
 
@@ -238,3 +239,10 @@ jsonPrimCodec
   → JsonCodec a
 jsonPrimCodec ty f =
   basicCodec (maybe (Left (TypeMismatch ty)) pure <<< f)
+
+-- | Helper function for defining recursive codecs.
+fix ∷ ∀ a. (JsonCodec a → JsonCodec a) → JsonCodec a
+fix f =
+  basicCodec
+    (\x → decode (f (fix f)) x)
+    (\x → encode (f (fix f)) x)
