@@ -74,7 +74,7 @@ nestForTagged = basicCodec (pure <<< dec) id
     case SM.pop "tag" obj of
       Nothing → SM.pureST do
         result ← SMST.new
-        SMST.poke result "tag" (mkValue obj)
+        SMST.poke result "value" (mkValue obj)
       Just (Tuple tagValue obj') → SM.pureST do
         result ← SMST.new
         _ ← SMST.poke result "tag" tagValue

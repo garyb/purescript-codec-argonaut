@@ -4,16 +4,19 @@ import Prelude
 
 import Control.Monad.Eff.Console (log)
 import Data.Argonaut.Core as J
+import Data.Argonaut.Gen as GenJ
 import Data.Codec ((<~<))
 import Data.Codec.Argonaut.Common as JA
 import Data.Codec.Argonaut.Migration as JAM
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.String.Gen (genAsciiString)
 import Data.StrMap as SM
+import Data.StrMap.Gen as GenSM
+import Data.String.Gen (genAsciiString)
+import Data.Tuple (Tuple(..))
 import Test.QuickCheck (Result(..), QC, quickCheck, (===))
 import Test.QuickCheck.Gen (Gen)
-import Test.Util (genJObject)
+import Test.Util (genJObject, propCodec)
 
 main :: QC () Unit
 main = do
@@ -34,6 +37,12 @@ main = do
 
   log "Checking renameField renames a field"
   quickCheck propDefaultFieldPreservesOriginal
+
+  log "Checking nestForTagged moves all expected fields under `value`"
+  quickCheck propNestForTaggedMovesUnderValue
+
+  log "Checking nestForTagged is idempotent"
+  quickCheck propNestForTaggedIdempotent
 
 propDefaultFieldAdded ∷ Gen Result
 propDefaultFieldAdded = do
@@ -86,6 +95,27 @@ propRenameField = do
   input ← SM.insert oldKey expectedValue <$> genJObject
   pure $ testMigrationCodec { key: newKey, expectedValue, input }
     $ JA.jobject <~< JAM.renameField oldKey newKey
+
+propNestForTaggedMovesUnderValue ∷ Gen Result
+propNestForTaggedMovesUnderValue = do
+  values ← GenSM.genStrMap genAsciiString GenJ.genJson
+  -- TODO: only-value
+  let expectedValue = J.fromObject (SM.delete "tag" values)
+  pure $ testMigrationCodec { key: "value", expectedValue, input: values }
+    $ JA.jobject <~< JAM.nestForTagged
+
+propNestForTaggedIdempotent ∷ Gen Result
+propNestForTaggedIdempotent = do
+  propCodec genTagged JAM.nestForTagged
+  where
+    genTagged = do
+      tag ← genAsciiString
+      expectedValue ← GenJ.genJson
+      pure $ J.fromObject $
+        SM.fromFoldable
+          [ Tuple "tag" (J.fromString tag)
+          , Tuple "value" expectedValue
+          ]
 
 testMigrationCodec
   ∷ { key ∷ String
