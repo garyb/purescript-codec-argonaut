@@ -254,6 +254,30 @@ fix f =
 -- |
 -- | This function is named as such as the pair of functions it accepts
 -- | correspond with the `preview` and `view` functions of a `Prism`-style lens.
+-- |
+-- | For example, in order to parse a mapping from an enum to strings, which
+-- | doesn't match up nicely with `Data.Codec.Argonaut.Sum.enumSum` we can use
+-- | prismaticCodec:
+-- |
+-- | ```purescript
+-- | data Direction = North | South | West | East
+-- |
+-- | directionCodec :: JsonCodec Direction
+-- | directionCodec = prismaticCodec dec enc string
+-- |   where
+-- |     dec = case _ of
+-- |       "N" -> Just North
+-- |       "S" -> Just South
+-- |       "W" -> Just West
+-- |       "E" -> Just East
+-- |       _ -> Nothing
+-- |
+-- |     enc = case _ of
+-- |       North -> "N"
+-- |       South -> "S"
+-- |       West -> "W"
+-- |       East -> "E"
+-- | ```
 prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
 prismaticCodec f g orig =
   basicCodec
