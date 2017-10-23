@@ -10,6 +10,15 @@ import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic, Constructor(..), NoArguments(..), Sum(..), from, to)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 
+-- | Encodes nullary sums with a Generic instance as strings that match the constructor names.
+-- |
+-- | ```purescript
+-- | data MySum = Ctor1 | Ctor2 | MoarCtors
+-- | derive instance genericMySum ∷ Generic MySum _
+-- |
+-- | encode nullarySum Ctor1 == JString "Ctor1"
+-- | decode nullarySum JString "MoarCtors" == Right MoarCtors
+-- |```
 nullarySum ∷ ∀ a r. Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodec a
 nullarySum name =
   C.basicCodec
