@@ -20,6 +20,28 @@ import Type.Equality as TE
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
 
+-- | Allows building codecs for variants in combination with variantCase.
+-- |
+-- | Commonly used to write decoders for sum-types, by providing a mapping from
+-- | and to a Variant from that type and then using `dimap`.
+-- |
+-- |```purescript
+-- | codecMaybe ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
+-- | codecMaybe codecA =
+-- |   dimap toVariant fromVariant
+-- |     (JAV.variant
+-- |       # JAV.variantCase _Just (Right codecA)
+-- |       # JAV.variantCase _Nothing (Left unit))
+-- |   where
+-- |   toVariant = case _ of
+-- |     Just a → V.inj _Just a
+-- |     Nothing → V.inj _Nothing unit
+-- |   fromVariant = V.case_
+-- |     # V.on _Just Just
+-- |     # V.on _Nothing (const Nothing)
+-- |   _Just = SProxy ∷ SProxy "just"
+-- |   _Nothing = SProxy ∷ SProxy "nothing"
+-- |```
 variant ∷ JsonCodec (Variant ())
 variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
 
