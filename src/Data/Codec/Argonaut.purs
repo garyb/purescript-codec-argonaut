@@ -125,6 +125,11 @@ jobject ∷ JsonCodec J.JObject
 jobject = jsonPrimCodec "Object" J.toObject J.fromObject
 
 -- | A codec for `Array` values.
+-- |```purescript
+-- | decodeIntArray ∷ Json → Either JsonDecodeError (Array Int)
+-- | decodeIntArray = decode (array int)
+-- |```
+
 array ∷ ∀ a. JsonCodec a → JsonCodec (Array a)
 array codec = GCodec dec enc
   where
