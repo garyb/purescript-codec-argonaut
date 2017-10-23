@@ -148,6 +148,18 @@ type JIndexedCodec a =
     a a
 
 -- | A codec for types that are encoded as an array with a specific layout.
+-- |
+-- | For example, given that we'd like to encode a Person as a 2-element array,
+-- | like so `[ "Karl", 25 ]`, we could write the following codec:
+-- |
+-- | ```purescript
+-- | type Person = { name ∷ String, age ∷ Int }
+-- |
+-- | JA.indexedArray "Test Object" $
+-- |   { name: _, age: _ }
+-- |     <$> _.name ~ index 0 JA.string
+-- |     <*> _.age ~ index 1 JA.int
+-- | ```
 indexedArray ∷ ∀ a. String → JIndexedCodec a → JsonCodec a
 indexedArray name =
   bihoistGCodec
