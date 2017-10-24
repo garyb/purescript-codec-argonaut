@@ -34,6 +34,16 @@ instance rowListCodecCons ∷
     tail = rowListCodec (R.RLProxy ∷ R.RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
 
 -- | Constructs a record codec from a record of codecs.
+-- |
+-- | ```purescript
+-- | type Person = { name ∷ String, age ∷ Int }
+-- |
+-- | personCodec ∷ CA.JsonCodec Person
+-- | personCodec = CA.object "Person" (record { name: CA.string, age: CA.int })
+-- |
+-- | decode personCodec "{ name: \"Carl\", age:\"25\" }" == Right { name: "Carl", age: 25 }
+-- | ```
+
 record
   ∷ ∀ ri ro rl
   . R.RowToList ri rl

@@ -11,6 +11,7 @@ module Data.Codec.Argonaut
   , char
   , jarray
   , jobject
+  , void
   , array
   , JIndexedCodec
   , indexedArray
@@ -125,6 +126,11 @@ jobject ∷ JsonCodec J.JObject
 jobject = jsonPrimCodec "Object" J.toObject J.fromObject
 
 -- | A codec for `Array` values.
+-- |```purescript
+-- | decodeIntArray ∷ Json → Either JsonDecodeError (Array Int)
+-- | decodeIntArray = decode (array int)
+-- |```
+
 array ∷ ∀ a. JsonCodec a → JsonCodec (Array a)
 array codec = GCodec dec enc
   where
@@ -143,6 +149,18 @@ type JIndexedCodec a =
     a a
 
 -- | A codec for types that are encoded as an array with a specific layout.
+-- |
+-- | For example, given that we'd like to encode a Person as a 2-element array,
+-- | like so `[ "Karl", 25 ]`, we could write the following codec:
+-- |
+-- | ```purescript
+-- | type Person = { name ∷ String, age ∷ Int }
+-- |
+-- | JA.indexedArray "Test Object" $
+-- |   { name: _, age: _ }
+-- |     <$> _.name ~ index 0 JA.string
+-- |     <*> _.age ~ index 1 JA.int
+-- | ```
 indexedArray ∷ ∀ a. String → JIndexedCodec a → JsonCodec a
 indexedArray name =
   bihoistGCodec
@@ -254,8 +272,32 @@ fix f =
 -- |
 -- | This function is named as such as the pair of functions it accepts
 -- | correspond with the `preview` and `view` functions of a `Prism`-style lens.
+-- |
+-- | For example, in order to parse a mapping from an enum to strings, which
+-- | doesn't match up nicely with `Data.Codec.Argonaut.Sum.enumSum` we can use
+-- | prismaticCodec:
+-- |
+-- | ```purescript
+-- | data Direction = North | South | West | East
+-- |
+-- | directionCodec :: JsonCodec Direction
+-- | directionCodec = prismaticCodec dec enc string
+-- |   where
+-- |     dec = case _ of
+-- |       "N" -> Just North
+-- |       "S" -> Just South
+-- |       "W" -> Just West
+-- |       "E" -> Just East
+-- |       _ -> Nothing
+-- |
+-- |     enc = case _ of
+-- |       North -> "N"
+-- |       South -> "S"
+-- |       West -> "W"
+-- |       East -> "E"
+-- | ```
 prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
 prismaticCodec f g orig =
   basicCodec
-    (\json → note (UnexpectedValue json) <<< f =<< (decode orig json))
+    (\json' → note (UnexpectedValue json') <<< f =<< decode orig json')
     (encode orig <<< g)

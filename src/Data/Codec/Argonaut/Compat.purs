@@ -21,6 +21,8 @@ import Data.Tuple (Tuple(..))
 
 -- | A codec for `Maybe` values.
 -- |
+-- | Encodes and decodes `Nothing` as `null`
+-- |
 -- | Note: this codec cannot represent nested `Maybe` values in a lossless
 -- | manner.
 maybe ∷ ∀ a. JsonCodec a → JsonCodec (Maybe a)
@@ -38,6 +40,10 @@ maybe codec = basicCodec dec enc
 -- | A codec for `StrMap` values.
 -- |
 -- | Encodes as a JSON object with the keys as properties.
+-- |
+-- | ```purescript
+-- | encode (strMap int) (Data.StrMap.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
+-- | ```
 strMap ∷ ∀ a. JsonCodec a → JsonCodec (SM.StrMap a)
 strMap codec =
   mapCodec

@@ -18,6 +18,9 @@ import Data.StrMap as SM
 import Data.Tuple (Tuple(..), fst, snd)
 
 -- | A codec for `Maybe` values.
+-- |
+-- | NOTE: This is not suitable to en/decode null values. If you need these kinds of codecs,
+-- | look into `Data.Codec.Argonaut.Compat`
 maybe ∷ ∀ a. JsonCodec a → JsonCodec (Maybe a)
 maybe codec = taggedSum "Maybe" printTag parseTag dec enc
   where

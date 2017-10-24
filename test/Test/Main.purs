@@ -6,7 +6,8 @@ import Control.Monad.Eff.Console (log)
 import Test.Common as Common
 import Test.Compat as Compat
 import Test.Migration as Migration
-import Test.Prim as Prim
+import Test.Prim as TestPrim
+import Test.Generic as Generic
 import Test.QuickCheck (QC)
 import Test.Variant as Variant
 import Test.Record as Record
@@ -15,7 +16,7 @@ main :: QC () Unit
 main = do
   log "Checking Prim codecs"
   log "------------------------------------------------------------"
-  Prim.main
+  TestPrim.main
   log ""
   log "Checking Common codecs"
   log "------------------------------------------------------------"
@@ -36,3 +37,7 @@ main = do
   log "Checking Migration codecs"
   log "------------------------------------------------------------"
   Migration.main
+  log ""
+  log "Checking Generic codecs"
+  log "------------------------------------------------------------"
+  Generic.main
