@@ -11,6 +11,7 @@ module Data.Codec.Argonaut
   , char
   , jarray
   , jobject
+  , void
   , array
   , JIndexedCodec
   , indexedArray
