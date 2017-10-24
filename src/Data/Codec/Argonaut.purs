@@ -257,5 +257,5 @@ fix f =
 prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
 prismaticCodec f g orig =
   basicCodec
-    (\json → note (UnexpectedValue json) <<< f =<< (decode orig json))
+    (\json' → note (UnexpectedValue json') <<< f =<< (decode orig json'))
     (encode orig <<< g)
