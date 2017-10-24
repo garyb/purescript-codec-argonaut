@@ -13,11 +13,13 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 -- | Encodes nullary sums with a Generic instance as strings that match the constructor names.
 -- |
 -- | ```purescript
+-- | import Data.Argonaut as J
+-- |
 -- | data MySum = Ctor1 | Ctor2 | MoarCtors
 -- | derive instance genericMySum ∷ Generic MySum _
 -- |
--- | encode nullarySum Ctor1 == JString "Ctor1"
--- | decode nullarySum JString "MoarCtors" == Right MoarCtors
+-- | encode nullarySum Ctor1 == J.fromString "Ctor1"
+-- | decode nullarySum (J.fromString "MoarCtors") == Right MoarCtors
 -- |```
 nullarySum ∷ ∀ a r. Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodec a
 nullarySum name =
