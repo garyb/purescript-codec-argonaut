@@ -16,16 +16,15 @@
     "package.json"
   ],
   "dependencies": {
-    "purescript-argonaut-core": "^3.1.0",
-    "purescript-codec": "^2.0.0",
-    "purescript-generics-rep": "^5.1.0",
-    "purescript-variant": "^3.2.0",
-    "purescript-typelevel-prelude": "^2.4.0",
-    "purescript-record": "^0.2.0",
+    "purescript-argonaut-core": "^3.1.1",
+    "purescript-codec": "^2.1.0",
+    "purescript-generics-rep": "^5.4.0",
+    "purescript-variant": "^4.0.0",
+    "purescript-typelevel-prelude": "^2.6.0",
     "purescript-type-equality": "^2.1.0"
   },
   "devDependencies": {
-    "purescript-argonaut-codecs": "^3.1.0",
-    "purescript-quickcheck": "^4.4.0"
+    "purescript-argonaut-codecs": "^3.2.0",
+    "purescript-quickcheck": "^4.6.1"
   }
 }
