@@ -2,17 +2,17 @@ module Test.Main where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
+import Effect (Effect)
+import Effect.Console (log)
 import Test.Common as Common
 import Test.Compat as Compat
+import Test.Generic as Generic
 import Test.Migration as Migration
 import Test.Prim as TestPrim
-import Test.Generic as Generic
-import Test.QuickCheck (QC)
-import Test.Variant as Variant
 import Test.Record as Record
+import Test.Variant as Variant
 
-main :: QC () Unit
+main :: Effect Unit
 main = do
   log "Checking Prim codecs"
   log "------------------------------------------------------------"

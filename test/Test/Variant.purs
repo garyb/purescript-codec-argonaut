@@ -2,7 +2,6 @@ module Test.Variant where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen (chooseBool, chooseInt)
 import Control.Monad.Gen.Common as GenC
 import Data.Codec.Argonaut.Common as JA
@@ -13,7 +12,9 @@ import Data.Profunctor (dimap)
 import Data.String.Gen (genAsciiString)
 import Data.Symbol (SProxy(..))
 import Data.Variant as V
-import Test.QuickCheck (QC, quickCheck)
+import Effect (Effect)
+import Effect.Console (log)
+import Test.QuickCheck (quickCheck)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
 
@@ -23,7 +24,7 @@ type TestVariant = V.Variant
   , c ∷ Maybe Boolean
   )
 
-main :: QC () Unit
+main :: Effect Unit
 main = do
   log "Checking Maybe-variant codec"
   quickCheck $

@@ -2,7 +2,6 @@ module Test.Prim where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Data.Argonaut.Core as J
@@ -15,14 +14,16 @@ import Data.Generic.Rep.Show (genericShow)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
-import Data.StrMap.Gen (genStrMap)
 import Data.String.Gen (genAsciiString)
 import Data.Symbol (SProxy(..))
-import Test.QuickCheck (QC, Result, quickCheck)
+import Effect (Effect)
+import Effect.Console (log)
+import Foreign.Object.Gen (genForeignObject)
+import Test.QuickCheck (Result, quickCheck)
 import Test.QuickCheck.Gen (Gen)
-import Test.Util (propCodec, propCodec', genInt)
+import Test.Util (genInt, propCodec, propCodec', propCodec'')
 
-main :: QC () Unit
+main :: Effect Unit
 main = do
   log "Checking JNull codec"
   quickCheck propNull
@@ -58,7 +59,7 @@ main = do
   quickCheck propFix
 
 propNull ∷ Gen Result
-propNull = propCodec (pure J.jNull) JA.null
+propNull = propCodec (pure unit) JA.null
 
 propBoolean ∷ Gen Result
 propBoolean = propCodec Gen.chooseBool JA.boolean
@@ -76,10 +77,10 @@ propChar ∷ Gen Result
 propChar = propCodec genAsciiChar JA.char
 
 propJArray ∷ Gen Result
-propJArray = propCodec (Gen.unfoldable genJson) JA.jarray
+propJArray = propCodec'' (show <<< map J.stringify) (Gen.unfoldable genJson) JA.jarray
 
 propJObject ∷ Gen Result
-propJObject = propCodec (genStrMap genAsciiString genJson) JA.jobject
+propJObject = propCodec'' (show <<< map J.stringify) (genForeignObject genAsciiString genJson) JA.jobject
 
 type TestRecord = { tag ∷ String, x ∷ Int, y ∷ Boolean }
 

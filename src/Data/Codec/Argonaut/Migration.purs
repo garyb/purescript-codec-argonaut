@@ -12,8 +12,8 @@ import Data.Argonaut.Core as J
 import Data.Codec (basicCodec)
 import Data.Codec.Argonaut (JsonCodec)
 import Data.Maybe (Maybe(..), maybe, fromMaybe)
-import Data.StrMap as SM
-import Data.StrMap.ST as SMST
+import Foreign.Object as FO
+import Foreign.Object.ST as FOST
 import Data.Tuple (Tuple(..), uncurry)
 
 -- | When dealing with a JSON object that may be missing a field, this codec
@@ -37,12 +37,12 @@ addDefaultOrUpdateField field = alterField field <<< map Just
 -- | codec can be used to alter the JSON before parsing to ensure the new field
 -- | name is used instead
 renameField ∷ String → String → JsonCodec J.Json
-renameField oldName newName = basicCodec (pure <<< dec) id
+renameField oldName newName = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
-  dec j = J.foldJsonObject j (J.fromObject <<< rename) j
-  rename ∷ J.JObject → J.JObject
-  rename obj = maybe obj (uncurry (SM.insert newName)) (SM.pop oldName obj)
+  dec j = J.caseJsonObject j (J.fromObject <<< rename) j
+  rename ∷ FO.Object J.Json → FO.Object J.Json
+  rename obj = maybe obj (uncurry (FO.insert newName)) (FO.pop oldName obj)
 
 -- | Prepares an object from a legacy codec for use in a `Variant` or
 -- | `taggedSum` codec.
@@ -65,29 +65,29 @@ renameField oldName newName = basicCodec (pure <<< dec) id
 -- | If the tag field is missing from the input, it will also be missing in the
 -- | output.
 nestForTagged ∷ JsonCodec J.Json
-nestForTagged = basicCodec (pure <<< dec) id
+nestForTagged = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
-  dec j = J.foldJsonObject j (J.fromObject <<< rewrite) j
-  rewrite ∷ J.JObject → J.JObject
+  dec j = J.caseJsonObject j (J.fromObject <<< rewrite) j
+  rewrite ∷ FO.Object J.Json → FO.Object J.Json
   rewrite obj =
-    case SM.pop "tag" obj of
-      Nothing → SM.pureST do
-        result ← SMST.new
-        SMST.poke result "value" (mkValue obj)
-      Just (Tuple tagValue obj') → SM.pureST do
-        result ← SMST.new
-        _ ← SMST.poke result "tag" tagValue
-        SMST.poke result "value" (mkValue obj')
-  mkValue ∷ J.JObject → J.Json
-  mkValue obj = case SM.pop "value" obj of
-    Just (Tuple valueValue obj') | SM.isEmpty obj' → valueValue
+    case FO.pop "tag" obj of
+      Nothing → FO.runST do
+        result ← FOST.new
+        FOST.poke "value" (mkValue obj) result
+      Just (Tuple tagValue obj') → FO.runST do
+        result ← FOST.new
+        _ ← FOST.poke "tag" tagValue result
+        FOST.poke "value" (mkValue obj') result
+  mkValue ∷ FO.Object J.Json → J.Json
+  mkValue obj = case FO.pop "value" obj of
+    Just (Tuple valueValue obj') | FO.isEmpty obj' → valueValue
     _ → J.fromObject obj
 
 alterField ∷ String → (Maybe J.Json → Maybe J.Json) → JsonCodec J.Json
-alterField field f = basicCodec (pure <<< dec) id
+alterField field f = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
-  dec j = J.foldJsonObject j (J.fromObject <<< setDefault) j
-  setDefault ∷ J.JObject → J.JObject
-  setDefault = SM.alter f field
+  dec j = J.caseJsonObject j (J.fromObject <<< setDefault) j
+  setDefault ∷ FO.Object J.Json → FO.Object J.Json
+  setDefault = FO.alter f field

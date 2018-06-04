@@ -2,7 +2,6 @@ module Test.Migration where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
 import Data.Argonaut.Core as J
 import Data.Argonaut.Gen as GenJ
 import Data.Codec ((<~<))
@@ -10,15 +9,17 @@ import Data.Codec.Argonaut.Common as JA
 import Data.Codec.Argonaut.Migration as JAM
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
-import Data.StrMap as SM
-import Data.StrMap.Gen as GenSM
 import Data.String.Gen (genAsciiString)
 import Data.Tuple (Tuple(..))
-import Test.QuickCheck (Result(..), QC, quickCheck, (===))
+import Effect (Effect)
+import Effect.Console (log)
+import Foreign.Object as FO
+import Foreign.Object.Gen as GenFO
+import Test.QuickCheck (Result(..), quickCheck, (===))
 import Test.QuickCheck.Gen (Gen)
-import Test.Util (genJObject, propCodec)
+import Test.Util (genJObject, propCodec'')
 
-main :: QC () Unit
+main :: Effect Unit
 main = do
   log "Checking addDefaultField adds a field if it is missing"
   quickCheck propDefaultFieldAdded
@@ -48,7 +49,7 @@ propDefaultFieldAdded ∷ Gen Result
 propDefaultFieldAdded = do
   let expectedValue = J.fromString "it's here"
   missingKey ← genAsciiString
-  input ← SM.delete missingKey <$> genJObject
+  input ← FO.delete missingKey <$> genJObject
   pure $ testMigrationCodec { key: missingKey, expectedValue, input }
     $ JA.jobject <~< JAM.addDefaultField missingKey expectedValue
 
@@ -57,7 +58,7 @@ propDefaultFieldPreservesOriginal = do
   let expectedValue = J.fromString "it's here"
   let unexpectedValue = J.fromString "it shouldn't be here"
   missingKey ← genAsciiString
-  input ← SM.insert missingKey expectedValue <$> genJObject
+  input ← FO.insert missingKey expectedValue <$> genJObject
   pure $ testMigrationCodec { key: missingKey, expectedValue, input }
     $ JA.jobject <~< JAM.addDefaultField missingKey unexpectedValue
 
@@ -66,7 +67,7 @@ propUpdateFieldAltersOriginal = do
   let expectedValue = J.fromString "it's here"
   let unexpectedValue = J.fromString "it shouldn't be here"
   updateKey ← genAsciiString
-  input ← SM.insert updateKey unexpectedValue <$> genJObject
+  input ← FO.insert updateKey unexpectedValue <$> genJObject
   pure $ testMigrationCodec { key: updateKey, expectedValue, input }
     $ JA.jobject <~< JAM.updateField updateKey (const expectedValue)
 
@@ -74,7 +75,7 @@ propAddDefaultOrUpdateField ∷ Gen Result
 propAddDefaultOrUpdateField = do
   let expectedValue = J.fromString "it's here"
   missingKey ← genAsciiString
-  input ← SM.delete missingKey <$> genJObject
+  input ← FO.delete missingKey <$> genJObject
   pure $ testMigrationCodec { key: missingKey, expectedValue, input }
     $ JA.jobject <~< JAM.addDefaultOrUpdateField missingKey (fromMaybe expectedValue)
 
@@ -83,7 +84,7 @@ propAddDefaultOrUpdateFieldAltersOriginal = do
   let expectedValue = J.fromString "it's here"
   let unexpectedValue = J.fromString "it shouldn't be here"
   updateKey ← genAsciiString
-  input ← SM.insert updateKey unexpectedValue <$> genJObject
+  input ← FO.insert updateKey unexpectedValue <$> genJObject
   pure $ testMigrationCodec { key: updateKey, expectedValue, input }
     $ JA.jobject <~< JAM.addDefaultOrUpdateField updateKey (maybe unexpectedValue (const expectedValue))
 
@@ -92,27 +93,27 @@ propRenameField = do
   let expectedValue = J.fromString "it's here"
   oldKey ← genAsciiString
   newKey ← genAsciiString
-  input ← SM.insert oldKey expectedValue <$> genJObject
+  input ← FO.insert oldKey expectedValue <$> genJObject
   pure $ testMigrationCodec { key: newKey, expectedValue, input }
     $ JA.jobject <~< JAM.renameField oldKey newKey
 
 propNestForTaggedMovesUnderValue ∷ Gen Result
 propNestForTaggedMovesUnderValue = do
-  values ← GenSM.genStrMap genAsciiString GenJ.genJson
+  values ← GenFO.genForeignObject genAsciiString GenJ.genJson
   -- TODO: only-value
-  let expectedValue = J.fromObject (SM.delete "tag" values)
+  let expectedValue = J.fromObject (FO.delete "tag" values)
   pure $ testMigrationCodec { key: "value", expectedValue, input: values }
     $ JA.jobject <~< JAM.nestForTagged
 
 propNestForTaggedIdempotent ∷ Gen Result
 propNestForTaggedIdempotent = do
-  propCodec genTagged JAM.nestForTagged
+  propCodec'' J.stringify genTagged JAM.nestForTagged
   where
     genTagged = do
       tag ← genAsciiString
       expectedValue ← GenJ.genJson
       pure $ J.fromObject $
-        SM.fromFoldable
+        FO.fromFoldable
           [ Tuple "tag" (J.fromString tag)
           , Tuple "value" expectedValue
           ]
@@ -120,14 +121,14 @@ propNestForTaggedIdempotent = do
 testMigrationCodec
   ∷ { key ∷ String
     , expectedValue ∷ J.Json
-    , input ∷ J.JObject
+    , input ∷ FO.Object J.Json
     }
-  → JA.JsonCodec J.JObject
+  → JA.JsonCodec (FO.Object J.Json)
   → Result
 testMigrationCodec { key, expectedValue, input } codec =
   case JA.decode codec (J.fromObject input) of
     Left err → Failed (JA.printJsonDecodeError err)
     Right obj →
-      case SM.lookup key obj of
-        Just value → value === expectedValue
+      case FO.lookup key obj of
+        Just value → J.stringify value === J.stringify expectedValue
         Nothing → Failed (JA.printJsonDecodeError (JA.AtKey key JA.MissingValue))

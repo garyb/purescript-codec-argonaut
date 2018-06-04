@@ -8,7 +8,8 @@ import Data.Argonaut.Gen as GenJ
 import Data.Codec.Argonaut.Common as JA
 import Data.Either (Either(..))
 import Data.String.Gen (genAsciiString)
-import Data.StrMap.Gen as SMG
+import Foreign.Object as FO
+import Foreign.Object.Gen as FOMG
 import Test.QuickCheck (Result(..), (<?>))
 import Test.QuickCheck.Gen (Gen)
 
@@ -25,8 +26,11 @@ propCodec' eq' show' gen codec = do
 propCodec ∷ ∀ a. Eq a ⇒ Show a ⇒ Gen a → JA.JsonCodec a → Gen Result
 propCodec = propCodec' eq show
 
+propCodec'' ∷ ∀ a. Eq a ⇒ (a → String) → Gen a → JA.JsonCodec a → Gen Result
+propCodec'' = propCodec' eq
+
 genInt ∷ Gen Int
 genInt = Gen.chooseInt (-100000) 100000
 
-genJObject ∷ Gen J.JObject
-genJObject = SMG.genStrMap genAsciiString GenJ.genJson
+genJObject ∷ Gen (FO.Object J.Json)
+genJObject = FOMG.genForeignObject genAsciiString GenJ.genJson

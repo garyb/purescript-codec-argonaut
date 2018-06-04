@@ -14,8 +14,8 @@ import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), jobject, json, prop,
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Profunctor.Star (Star(..))
-import Data.StrMap as SM
-import Data.StrMap.ST as SMST
+import Foreign.Object as FO
+import Foreign.Object.ST as FOST
 import Data.Tuple (Tuple(..))
 
 -- | A helper for defining JSON codecs for "enum" sum types, where every
@@ -74,7 +74,7 @@ taggedSum name printTag parseTag f g = GCodec decodeCase encodeCase
   encodeCase = Star case _ of
     a | Tuple tag value ← g a →
       writer $ Tuple a $ encode jobject $
-        SM.pureST do
-          obj ← SMST.new
-          _ ← SMST.poke obj "tag" (encode string (printTag tag))
-          maybe (pure obj) (SMST.poke obj "value") value
+        FO.runST do
+          obj ← FOST.new
+          _ ← FOST.poke "tag" (encode string (printTag tag)) obj
+          maybe (pure obj) (\v -> FOST.poke "value" v obj) value

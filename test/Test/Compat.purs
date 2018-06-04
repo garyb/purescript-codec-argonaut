@@ -2,19 +2,20 @@ module Test.Compat where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen.Common as GenC
 import Data.Argonaut.Decode (class DecodeJson, decodeJson)
 import Data.Argonaut.Encode (class EncodeJson, encodeJson)
 import Data.Codec.Argonaut.Compat as JA
 import Data.Either (Either(..))
 import Data.String.Gen (genAsciiString)
-import Data.StrMap.Gen (genStrMap)
-import Test.QuickCheck (QC, Result, quickCheck, (===))
+import Effect (Effect)
+import Effect.Console (log)
+import Foreign.Object.Gen (genForeignObject)
+import Test.QuickCheck (Result, quickCheck, (===))
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
 
-main ∷ QC () Unit
+main ∷ Effect Unit
 main = do
   log "Checking Maybe codec"
   quickCheck propMaybeCodec
@@ -55,19 +56,19 @@ propMaybeCodecDecodeCompat =
 propStrMapCodec ∷ Gen Result
 propStrMapCodec =
   propCodec
-    (genStrMap genAsciiString genInt)
+    (genForeignObject genAsciiString genInt)
     (JA.strMap JA.int)
 
 propStrMapCodecEncodeCompat ∷ Gen Result
 propStrMapCodecEncodeCompat =
   propCodecEncodeCompat
-    (genStrMap genAsciiString genInt)
+    (genForeignObject genAsciiString genInt)
     (JA.strMap JA.int)
 
 propStrMapCodecDecodeCompat ∷ Gen Result
 propStrMapCodecDecodeCompat =
   propCodecDecodeCompat
-    (genStrMap genAsciiString genInt)
+    (genForeignObject genAsciiString genInt)
     (JA.strMap JA.int)
 
 propCodecEncodeCompat ∷ ∀ a. Eq a ⇒ Show a ⇒ DecodeJson a ⇒ Gen a → JA.JsonCodec a → Gen Result
