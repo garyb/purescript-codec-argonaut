@@ -15,7 +15,7 @@ import Data.Codec.Argonaut.Common (either, list, map, tuple) as Common
 import Data.Either (Either)
 import Data.Functor as F
 import Data.Maybe (Maybe(..))
-import Data.StrMap as SM
+import Foreign.Object as FO
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 
@@ -42,17 +42,17 @@ maybe codec = basicCodec dec enc
 -- | Encodes as a JSON object with the keys as properties.
 -- |
 -- | ```purescript
--- | encode (strMap int) (Data.StrMap.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
+-- | encode (foreignObject int) (Foreign.Object.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
 -- | ```
-strMap ∷ ∀ a. JsonCodec a → JsonCodec (SM.StrMap a)
-strMap codec =
+foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
+foreignObject codec =
   mapCodec
-    (BF.lmap (Named "StrMap") <<< F.map fromArray <<< traverse decodeItem <<< SM.toUnfoldable)
+    (BF.lmap (Named "StrMap") <<< F.map fromArray <<< traverse decodeItem <<< FO.toUnfoldable)
     (F.map (encode codec))
     jobject
   where
-  fromArray ∷ ∀ v. Array (Tuple String v) → SM.StrMap v
-  fromArray = SM.fromFoldable
+  fromArray ∷ ∀ v. Array (Tuple String v) → FO.Object v
+  fromArray = FO.fromFoldable
   decodeItem ∷ Tuple String J.Json → Either JsonDecodeError (Tuple String a)
   decodeItem (Tuple key value) =
     BF.bimap (AtKey key) (Tuple key) (decode codec value)

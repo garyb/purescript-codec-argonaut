@@ -10,12 +10,13 @@ import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), decode, encode, jobj
 import Data.Either (Either(..))
 import Data.Newtype (un)
 import Data.Profunctor.Star (Star(..))
-import Data.Record as Rec
-import Data.StrMap as SM
-import Data.StrMap.ST as SMST
 import Data.Symbol (class IsSymbol, reflectSymbol, SProxy(..))
 import Data.Tuple (Tuple(..))
 import Data.Variant (SProxy, Variant, case_, inj, on)
+import Foreign.Object as FO
+import Foreign.Object.ST as FOST
+import Prim.Row as Row
+import Record as Rec
 import Type.Equality as TE
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
@@ -48,7 +49,7 @@ variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
 variantCase
   ∷ ∀ l a r r'
   . IsSymbol l
-  ⇒ RowCons l a r r'
+  ⇒ Row.Cons l a r r'
   ⇒ SProxy l
   → Either a (JsonCodec a)
   → JsonCodec (Variant r)
@@ -72,12 +73,12 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   enc' = Star \v →
     on proxy
       (\v' → writer $ Tuple v $ encode jobject $
-        SM.pureST do
-          obj ← SMST.new
-          _ ← SMST.poke obj "tag" (encode string (reflectSymbol proxy))
+        FO.runST do
+          obj ← FOST.new
+          _ ← FOST.poke "tag" (encode string (reflectSymbol proxy)) obj
           case eacodec of
             Left _ → pure obj
-            Right codec → SMST.poke obj "value" (encode codec v'))
+            Right codec → FOST.poke "value" (encode codec v') obj)
       (\v' → un Star enc v' $> v) v
 
   coerceR ∷ Variant r → Variant r'
@@ -91,8 +92,8 @@ instance variantCodecNil ∷ VariantCodec R.Nil () () where
 
 instance variantCodecCons ∷
   ( VariantCodec rs ri' ro'
-  , RowCons sym (Either a (JsonCodec a)) ri' ri
-  , RowCons sym a ro' ro
+  , Row.Cons sym (Either a (JsonCodec a)) ri' ri
+  , Row.Cons sym a ro' ro
   , IsSymbol sym
   , TE.TypeEquals co (Either a (JsonCodec a))
   ) ⇒ VariantCodec (R.Cons sym co rs) ri ro where

@@ -14,7 +14,7 @@ import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (dimap)
-import Data.StrMap as SM
+import Foreign.Object as FO
 import Data.Tuple (Tuple(..), fst, snd)
 
 -- | A codec for `Maybe` values.
@@ -80,5 +80,5 @@ map codecA = dimap M.toUnfoldable M.fromFoldable <<< array <<< tuple codecA
 -- | A codec for `StrMap` values.
 -- |
 -- | Encodes as an array of two-element key/value arrays in JSON.
-strMap ∷ ∀ a. JsonCodec a → JsonCodec (SM.StrMap a)
-strMap = dimap SM.toUnfoldable SM.fromFoldable <<< array <<< tuple string
+foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
+foreignObject = dimap FO.toUnfoldable FO.fromFoldable <<< array <<< tuple string

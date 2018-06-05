@@ -2,16 +2,18 @@ module Test.Record where
 
 import Prelude
 
-import Control.Monad.Eff.Console (log)
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
+import Data.Argonaut.Core (stringify)
 import Data.Codec.Argonaut.Common as JA
 import Data.Codec.Argonaut.Record as JAR
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
 import Data.String.Gen (genAsciiString)
-import Test.QuickCheck (QC, quickCheck)
+import Effect (Effect)
+import Effect.Console (log)
+import Test.QuickCheck (quickCheck)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
 
@@ -31,7 +33,7 @@ newtype Outer = Outer OuterR
 derive instance newtypeOuter ∷ Newtype Outer _
 
 instance showOuter ∷ Show Outer where
-  show (Outer r) = "Outer " <> show (JA.encode outerCodec r)
+  show (Outer r) = "Outer " <> stringify (JA.encode outerCodec r)
 
 instance eqOuter ∷ Eq Outer where
   eq (Outer o1) (Outer o2) =
@@ -70,7 +72,7 @@ genInner = do
   m ← Gen.chooseBool
   pure { n, m }
 
-main ∷ QC () Unit
+main ∷ Effect Unit
 main = do
   log "Checking record codec"
   quickCheck $ propCodec (Outer <$> genOuter) (dimap unwrap wrap outerCodec)

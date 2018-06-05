@@ -5,8 +5,9 @@ module Data.Codec.Argonaut.Record
   ) where
 
 import Data.Codec.Argonaut as CA
-import Data.Record as Rec
 import Data.Symbol (class IsSymbol, SProxy(..))
+import Prim.Row as Row
+import Record as Rec
 import Type.Equality as TE
 import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
@@ -19,8 +20,8 @@ instance rowListCodecNil ∷ RowListCodec R.Nil () () where
 
 instance rowListCodecCons ∷
   ( RowListCodec rs ri' ro'
-  , RowCons sym (CA.JsonCodec a) ri' ri
-  , RowCons sym a ro' ro
+  , Row.Cons sym (CA.JsonCodec a) ri' ri
+  , Row.Cons sym a ro' ro
   , IsSymbol sym
   , TE.TypeEquals co (CA.JsonCodec a)
   ) ⇒ RowListCodec (R.Cons sym co rs) ri ro where
