@@ -59,4 +59,4 @@ propStrMapCodec ∷ Gen Result
 propStrMapCodec =
   propCodec
     (genForeignObject genAsciiString genInt)
-    (JA.strMap JA.int)
+    (JA.foreignObject JA.int)

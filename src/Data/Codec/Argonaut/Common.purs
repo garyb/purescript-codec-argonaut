@@ -80,5 +80,5 @@ map codecA = dimap M.toUnfoldable M.fromFoldable <<< array <<< tuple codecA
 -- | A codec for `StrMap` values.
 -- |
 -- | Encodes as an array of two-element key/value arrays in JSON.
-strMap ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
-strMap = dimap FO.toUnfoldable FO.fromFoldable <<< array <<< tuple string
+foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
+foreignObject = dimap FO.toUnfoldable FO.fromFoldable <<< array <<< tuple string

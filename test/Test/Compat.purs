@@ -57,19 +57,19 @@ propStrMapCodec ∷ Gen Result
 propStrMapCodec =
   propCodec
     (genForeignObject genAsciiString genInt)
-    (JA.strMap JA.int)
+    (JA.foreignObject JA.int)
 
 propStrMapCodecEncodeCompat ∷ Gen Result
 propStrMapCodecEncodeCompat =
   propCodecEncodeCompat
     (genForeignObject genAsciiString genInt)
-    (JA.strMap JA.int)
+    (JA.foreignObject JA.int)
 
 propStrMapCodecDecodeCompat ∷ Gen Result
 propStrMapCodecDecodeCompat =
   propCodecDecodeCompat
     (genForeignObject genAsciiString genInt)
-    (JA.strMap JA.int)
+    (JA.foreignObject JA.int)
 
 propCodecEncodeCompat ∷ ∀ a. Eq a ⇒ Show a ⇒ DecodeJson a ⇒ Gen a → JA.JsonCodec a → Gen Result
 propCodecEncodeCompat gen codec = do

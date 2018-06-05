@@ -42,10 +42,10 @@ maybe codec = basicCodec dec enc
 -- | Encodes as a JSON object with the keys as properties.
 -- |
 -- | ```purescript
--- | encode (strMap int) (Foreign.Object.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
+-- | encode (foreignObject int) (Foreign.Object.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
 -- | ```
-strMap ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
-strMap codec =
+foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
+foreignObject codec =
   mapCodec
     (BF.lmap (Named "StrMap") <<< F.map fromArray <<< traverse decodeItem <<< FO.toUnfoldable)
     (F.map (encode codec))
