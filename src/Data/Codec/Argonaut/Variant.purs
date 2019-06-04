@@ -15,10 +15,11 @@ import Data.Tuple (Tuple(..))
 import Data.Variant (SProxy, Variant, case_, inj, on)
 import Foreign.Object as FO
 import Foreign.Object.ST as FOST
-import Prim.Row as Row
+import Prim.Row as R
+import Prim.RowList as RL
 import Record as Rec
+import Type.Data.RowList (RLProxy(..))
 import Type.Equality as TE
-import Type.Row as R
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | Allows building codecs for variants in combination with variantCase.
@@ -49,7 +50,7 @@ variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
 variantCase
   ∷ ∀ l a r r'
   . IsSymbol l
-  ⇒ Row.Cons l a r r'
+  ⇒ R.Cons l a r r'
   ⇒ SProxy l
   → Either a (JsonCodec a)
   → JsonCodec (Variant r)
@@ -84,19 +85,19 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   coerceR ∷ Variant r → Variant r'
   coerceR = unsafeCoerce
 
-class VariantCodec (rl ∷ R.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
-  variantCodec ∷ R.RLProxy rl → Record ri → JsonCodec (Variant ro)
+class VariantCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
+  variantCodec ∷ RLProxy rl → Record ri → JsonCodec (Variant ro)
 
-instance variantCodecNil ∷ VariantCodec R.Nil () () where
+instance variantCodecNil ∷ VariantCodec RL.Nil () () where
   variantCodec _ _ = variant
 
 instance variantCodecCons ∷
   ( VariantCodec rs ri' ro'
-  , Row.Cons sym (Either a (JsonCodec a)) ri' ri
-  , Row.Cons sym a ro' ro
+  , R.Cons sym (Either a (JsonCodec a)) ri' ri
+  , R.Cons sym a ro' ro
   , IsSymbol sym
   , TE.TypeEquals co (Either a (JsonCodec a))
-  ) ⇒ VariantCodec (R.Cons sym co rs) ri ro where
+  ) ⇒ VariantCodec (RL.Cons sym co rs) ri ro where
   variantCodec _ codecs =
     variantCase (SProxy ∷ SProxy sym) codec tail
     where
@@ -104,12 +105,12 @@ instance variantCodecCons ∷
     codec = TE.from (Rec.get (SProxy ∷ SProxy sym) codecs)
 
     tail ∷ JsonCodec (Variant ro')
-    tail = variantCodec (R.RLProxy ∷ R.RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
+    tail = variantCodec (RLProxy ∷ RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
 
 variantMatch
   ∷ ∀ rl ri ro
-  . R.RowToList ri rl
+  . RL.RowToList ri rl
   ⇒ VariantCodec rl ri ro
   ⇒ Record ri
   → JsonCodec (Variant ro)
-variantMatch = variantCodec (R.RLProxy ∷ R.RLProxy rl)
+variantMatch = variantCodec (RLProxy ∷ RLProxy rl)
