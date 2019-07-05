@@ -18,8 +18,8 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 -- | data MySum = Ctor1 | Ctor2 | MoarCtors
 -- | derive instance genericMySum ∷ Generic MySum _
 -- |
--- | encode nullarySum Ctor1 == J.fromString "Ctor1"
--- | decode nullarySum (J.fromString "MoarCtors") == Right MoarCtors
+-- | encode (nullarySum "MySum") Ctor1 == J.fromString "Ctor1"
+-- | decode (nullarySum "MySum") (J.fromString "MoarCtors") == Right MoarCtors
 -- |```
 nullarySum ∷ ∀ a r. Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodec a
 nullarySum name =
