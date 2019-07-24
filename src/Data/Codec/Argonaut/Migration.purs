@@ -1,3 +1,12 @@
+-- | Codecs that provide forward migrations. In a forward migration, the decoder
+-- | migrates to the new format while decoding from JSON and the encoder uses
+-- | the new format while encoding to JSON.
+-- |
+-- | If you need more control over a forward migration, the `Functor` instance
+-- | allows operating on the underlying `Json` value directly.
+-- |
+-- | If you need both forward and backward migrations, the `Profunctor` instance
+-- | allows operating on the underlying `Json` value directly in both directions.
 module Data.Codec.Argonaut.Migration
   ( addDefaultField
   , updateField
