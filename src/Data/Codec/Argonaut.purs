@@ -8,6 +8,7 @@ module Data.Codec.Argonaut
   , number
   , int
   , string
+  , codePoint
   , char
   , jarray
   , jobject
@@ -34,7 +35,7 @@ import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
 import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
-import Data.Codec (decode, encode, (~), (<~<)) as Exports
+import Data.Codec (decode, encode, (~), (<~<), (>~>)) as Exports
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as I
