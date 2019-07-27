@@ -15,7 +15,7 @@
 -- | states need to be introduced. In this situation a `JsonCodec` will need to
 -- | be constructed manually - this should be a last resort though, as building
 -- | a codec manually means there is no guarantee that it will roundtrip
--- | succesfully.
+-- | successfully.
 -- |
 -- | Migrations are applied by composing a migration codec to run in advance of
 -- | the codec proper. Codec composition is performed with the `(<~<)` and
