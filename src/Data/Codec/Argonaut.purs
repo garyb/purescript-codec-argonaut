@@ -137,12 +137,15 @@ jarray = jsonPrimCodec "Array" J.toArray J.fromArray
 jobject ∷ JsonCodec (FO.Object J.Json)
 jobject = jsonPrimCodec "Object" J.toObject J.fromObject
 
--- | A codec for `Array` values.
--- |```purescript
--- | decodeIntArray ∷ Json → Either JsonDecodeError (Array Int)
--- | decodeIntArray = decode (array int)
--- |```
-
+-- | A codec for arbitrary length `Array`s where every item in the array
+-- | shares the same type.
+-- |
+-- | ``` purescript
+-- | import Data.Codec.Argonaut as CA
+-- |
+-- | codecIntArray ∷ CA.JsonCodec (Array Int)
+-- | codecIntArray = CA.array CA.int
+-- | ```
 array ∷ ∀ a. JsonCodec a → JsonCodec (Array a)
 array codec = GCodec dec enc
   where
@@ -162,16 +165,20 @@ type JIndexedCodec a =
 
 -- | A codec for types that are encoded as an array with a specific layout.
 -- |
--- | For example, given that we'd like to encode a Person as a 2-element array,
--- | like so `[ "Karl", 25 ]`, we could write the following codec:
+-- | For example, if we'd like to encode a `Person` as a 2-element array, like
+-- | `["Rashida", 37]`, we could write the following codec:
 -- |
 -- | ```purescript
+-- | import Data.Codec ((~))
+-- | import Data.Codec.Argonaut as CA
+-- |
 -- | type Person = { name ∷ String, age ∷ Int }
 -- |
--- | JA.indexedArray "Test Object" $
+-- | codecPerson ∷ CA.JsonCodec Person
+-- | codecPerson = CA.indexedArray "Test Object" $
 -- |   { name: _, age: _ }
--- |     <$> _.name ~ index 0 JA.string
--- |     <*> _.age ~ index 1 JA.int
+-- |     <$> _.name ~ CA.index 0 CA.string
+-- |     <*> _.age ~ CA.index 1 CA.int
 -- | ```
 indexedArray ∷ ∀ a. String → JIndexedCodec a → JsonCodec a
 indexedArray name =
@@ -198,6 +205,9 @@ type JPropCodec a =
     a a
 
 -- | A codec for objects that are encoded with specific properties.
+-- |
+-- | See also `Data.Codec.Argonaut.Record.object` for a more commonly useful
+-- | version of this function.
 object ∷ ∀ a. String → JPropCodec a → JsonCodec a
 object name =
   bihoistGCodec
@@ -220,13 +230,23 @@ prop key codec = GCodec dec enc
 -- | provides a convenient method for defining codecs for record types that
 -- | encode into JSON objects of the same shape.
 -- |
--- | For example:
+-- | For example, to encode a record as the JSON object
+-- | `{ "name": "Karl", "age": 25 }` we would define a codec like this:
 -- | ```
--- | myRecordCodec =
--- |   object "MyRecord" $ record
--- |     # recordProp (SProxy :: SProxy "tag") tagCodec
--- |     # recordProp (SProxy :: SProxy "value") valueCodec
+-- | import Data.Codec.Argonaut as CA
+-- | import Data.Symbol (SProxy(..))
+-- |
+-- | type Person = { name ∷ String, age ∷ Int }
+-- |
+-- | codecPerson ∷ CA.JsonCodec Person
+-- | codecPerson =
+-- |   CA.object "Person" $ CA.record
+-- |     # CA.recordProp (SProxy :: _ "name") CA.string
+-- |     # CA.recordProp (SProxy :: _ "age") CA.int
 -- | ```
+-- |
+-- | See also `Data.Codec.Argonaut.Record.object` for a more commonly useful
+-- | version of this function.
 record ∷ JPropCodec {}
 record = GCodec (pure {}) (Star \val → writer (Tuple val L.Nil))
 
@@ -271,7 +291,27 @@ jsonPrimCodec
 jsonPrimCodec ty f =
   basicCodec (maybe (Left (TypeMismatch ty)) pure <<< f)
 
--- | Helper function for defining recursive codecs.
+-- | Helper function for defining recursive codecs in situations where the codec
+-- | definition causes a _"The value of <codec> is undefined here"_ error.
+-- |
+-- | ```purescript
+-- | import Data.Codec.Argonaut as CA
+-- | import Data.Codec.Argonaut.Common as CAC
+-- | import Data.Codec.Argonaut.Record as CAR
+-- | import Data.Maybe (Maybe)
+-- | import Data.Newtype (class Newtype)
+-- | import Data.Profunctor (wrapIso)
+-- |
+-- | newtype IntList = IntList { cell ∷ Int, rest ∷ Maybe IntList }
+-- |
+-- | derive instance newtypeLoopyList ∷ Newtype IntList _
+-- |
+-- | codecIntList ∷ CA.JsonCodec IntList
+-- | codecIntList =
+-- |   CA.fix \codec →
+-- |     wrapIso IntList $
+-- |       CAR.object "IntList" { cell: CA.int, rest: CAC.maybe codec }
+-- | ```
 fix ∷ ∀ a. (JsonCodec a → JsonCodec a) → JsonCodec a
 fix f =
   basicCodec
@@ -285,9 +325,15 @@ fix f =
 -- | This function is named as such as the pair of functions it accepts
 -- | correspond with the `preview` and `view` functions of a `Prism`-style lens.
 -- |
--- | For example, in order to parse a mapping from an enum to strings, which
--- | doesn't match up nicely with `Data.Codec.Argonaut.Sum.enumSum` we can use
--- | prismaticCodec:
+-- | An example of this would be a codec for `Data.String.NonEmpty.NonEmptyString`:
+-- |
+-- | ```purescript
+-- | nonEmptyString ∷ CA.JsonCodec NES.NonEmptyString
+-- | nonEmptyString = CA.prismaticCodec NES.fromString NES.toString CA.string
+-- | ```
+-- |
+-- | Another example might be to handle a mapping from a small sum type to
+-- | strings:
 -- |
 -- | ```purescript
 -- | data Direction = North | South | West | East
@@ -308,6 +354,9 @@ fix f =
 -- |       West -> "W"
 -- |       East -> "E"
 -- | ```
+-- |
+-- | Although for this latter case there are some other options too, in the form
+-- | of `Data.Codec.Argonaut.Generic.nullarySum` and `Data.Codec.Argonaut.Sum.enumSum`.
 prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
 prismaticCodec f g orig =
   basicCodec
