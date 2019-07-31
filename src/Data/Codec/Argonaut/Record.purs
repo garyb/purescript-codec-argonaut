@@ -1,8 +1,4 @@
-module Data.Codec.Argonaut.Record
-  ( class RowListCodec
-  , rowListCodec
-  , record
-  ) where
+module Data.Codec.Argonaut.Record where
 
 import Data.Codec.Argonaut as CA
 import Data.Symbol (class IsSymbol, SProxy(..))
@@ -13,6 +9,37 @@ import Type.Data.RowList (RLProxy(..))
 import Type.Equality as TE
 import Unsafe.Coerce (unsafeCoerce)
 
+-- | Constructs a `JsonCodec` for a `Record` from a name and a record of codecs.
+-- | The name is used in the error message produced when decoding fails.
+-- |
+-- | ```purescript
+-- | type Person = { name ∷ String, age ∷ Int }
+-- |
+-- | personCodec ∷ CA.JsonCodec Person
+-- | personCodec = CAR.object "Person" { name: CA.string, age: CA.int }
+-- | ```
+object
+  ∷ ∀ ri ro rl
+  . RL.RowToList ri rl
+  ⇒ RowListCodec rl ri ro
+  ⇒ String
+  → Record ri
+  → CA.JsonCodec (Record ro)
+object name rec = CA.object name (record rec)
+
+-- | Constructs a `JPropCodec` for a `Record` from a record of codecs. Commonly
+-- | the `object` function in this module will be the preferred choice, as that
+-- | produces a `JsonCodec` instead.
+record
+  ∷ ∀ ri ro rl
+  . RL.RowToList ri rl
+  ⇒ RowListCodec rl ri ro
+  ⇒ Record ri
+  → CA.JPropCodec (Record ro)
+record = rowListCodec (RLProxy ∷ RLProxy rl)
+
+-- | The class used to enable the building of `Record` codecs by providing a
+-- | record of codecs.
 class RowListCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
   rowListCodec ∷ RLProxy rl → Record ri → CA.JPropCodec (Record ro)
 
@@ -34,22 +61,3 @@ instance rowListCodecCons ∷
 
     tail ∷ CA.JPropCodec (Record ro')
     tail = rowListCodec (RLProxy ∷ RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
-
--- | Constructs a record codec from a record of codecs.
--- |
--- | ```purescript
--- | type Person = { name ∷ String, age ∷ Int }
--- |
--- | personCodec ∷ CA.JsonCodec Person
--- | personCodec = CA.object "Person" (record { name: CA.string, age: CA.int })
--- |
--- | decode personCodec "{ name: \"Carl\", age:\"25\" }" == Right { name: "Carl", age: 25 }
--- | ```
-
-record
-  ∷ ∀ ri ro rl
-  . RL.RowToList ri rl
-  ⇒ RowListCodec rl ri ro
-  ⇒ Record ri
-  → CA.JPropCodec (Record ro)
-record = rowListCodec (RLProxy ∷ RLProxy rl)
