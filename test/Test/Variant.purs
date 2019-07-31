@@ -31,6 +31,11 @@ main = do
     propCodec
       (GenC.genMaybe genAsciiString)
       (codecMaybe JA.string)
+  log "Checking Maybe-variantMatch codec"
+  quickCheck $
+    propCodec
+      (GenC.genMaybe genAsciiString)
+      (codecMaybeMatch JA.string)
 
   log "Checking Either-variant codec"
   quickCheck $
@@ -57,6 +62,22 @@ codecMaybe codecA =
     # V.on _Nothing (const Nothing)
   _Just = SProxy ∷ SProxy "just"
   _Nothing = SProxy ∷ SProxy "nothing"
+
+codecMaybeMatch ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
+codecMaybeMatch codecA =
+  dimap toVariant fromVariant
+    (JAV.variantMatch
+      { just: Right codecA
+      , nothing: Left unit
+      })
+  where
+  toVariant = case _ of
+    Just a → V.inj (SProxy ∷ _ "just") a
+    Nothing → V.inj (SProxy ∷ _ "nothing") unit
+  fromVariant = V.match
+    { just: Just
+    , nothing: \_ → Nothing
+    }
 
 codecEither ∷ ∀ a b. JA.JsonCodec a → JA.JsonCodec b → JA.JsonCodec (Either a b)
 codecEither codecA codecB =
