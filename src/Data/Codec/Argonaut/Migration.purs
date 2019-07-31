@@ -1,12 +1,51 @@
--- | Codecs that provide forward migrations. In a forward migration, the decoder
--- | migrates to the new format while decoding from JSON and the encoder uses
--- | the new format while encoding to JSON.
+-- | Codecs that provide forward migrations.
+-- |
+-- | In a forward migration, the decoder migrates to the new format while
+-- | decoding from JSON and the encoder uses the new format while encoding to
+-- | JSON.
 -- |
 -- | If you need more control over a forward migration, the `Functor` instance
 -- | allows operating on the underlying `Json` value directly.
 -- |
 -- | If you need both forward and backward migrations, the `Profunctor` instance
--- | allows operating on the underlying `Json` value directly in both directions.
+-- | allows operating on the underlying `Json` value directly in both
+-- | directions.
+-- |
+-- | Sometimes even greater control over migration is required, and new error
+-- | states need to be introduced. In this situation a `JsonCodec` will need to
+-- | be constructed manually - this should be a last resort though, as building
+-- | a codec manually means there is no guarantee that it will roundtrip
+-- | successfully.
+-- |
+-- | Migrations are applied by composing a migration codec to run in advance of
+-- | the codec proper. Codec composition is performed with the `(<~<)` and
+-- | `(>~>)` operators from `Data.Codec`.
+-- |
+-- | An example of a codec with a migration applied:
+-- |
+-- | ``` purescript
+-- | import Data.Codec ((>~>))
+-- | import Data.Codec.Argonaut as CA
+-- | import Data.Codec.Argonaut.Migration as CAM
+-- | import Data.Codec.Argonaut.Record as CAR
+-- |
+-- | type MyModel = { key ∷ String, value ∷ Int }
+-- |
+-- | codec ∷ CA.JsonCodec MyModel
+-- | codec =
+-- |   CAM.renameField "tag" "key" >~>
+-- |     CA.object "MyModel" (CAR.record
+-- |      { key: CA.string
+-- |      , value: CA.int
+-- |      })
+-- | ```
+-- |
+-- | Here we're using the `renameField` migration to rename a property of our
+-- | JSON object from `"tag"` to `"key"`, and then in the codec proper we only
+-- | need to deal with `"key"`.
+-- |
+-- | Multiple migrations can be chained together using the codec composition
+-- | operators.
 module Data.Codec.Argonaut.Migration
   ( addDefaultField
   , updateField

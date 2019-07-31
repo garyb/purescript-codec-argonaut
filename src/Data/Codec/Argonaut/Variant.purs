@@ -22,10 +22,51 @@ import Type.Data.RowList (RLProxy(..))
 import Type.Equality as TE
 import Unsafe.Coerce (unsafeCoerce)
 
--- | Allows building codecs for variants in combination with variantCase.
+-- | Builds a codec for a variant from a record, similar to the way
+-- | `Variant.match` works to pattern match on a variant.
 -- |
 -- | Commonly used to write decoders for sum-types, by providing a mapping from
 -- | and to a Variant from that type and then using `dimap`.
+-- |
+-- | Each field in the record accepts an `Either`, where `Right` is used to
+-- | specify a codec used for the constructor, and `Left` is used to specify a
+-- | static value (generally as `Left unit` for nullary constructors).
+-- |
+-- | The variant will be encoded as a JSON object of the form
+-- | `{ "tag": <name>, "value": <value> }`, where `<name>` is the name of the
+-- | variant case, and `<value>` is the associated value (omitted in the case
+-- | of static `Left`-defined values).
+-- |
+-- |```purescript
+-- | codecMaybeMatch ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
+-- | codecMaybeMatch codecA =
+-- |   dimap toVariant fromVariant
+-- |     (JAV.variantMatch
+-- |       { just: Right codecA
+-- |       , nothing: Left unit
+-- |       })
+-- |   where
+-- |   toVariant = case _ of
+-- |     Just a → V.inj (SProxy ∷ _ "just") a
+-- |     Nothing → V.inj (SProxy ∷ _ "nothing") unit
+-- |   fromVariant = V.match
+-- |     { just: Just
+-- |     , nothing: \_ → Nothing
+-- |     }
+-- |```
+variantMatch
+  ∷ ∀ rl ri ro
+  . RL.RowToList ri rl
+  ⇒ VariantCodec rl ri ro
+  ⇒ Record ri
+  → JsonCodec (Variant ro)
+variantMatch = variantCodec (RLProxy ∷ RLProxy rl)
+
+-- | Builds codecs for variants in combination with `variantCase`.
+-- |
+-- | Provides an alternative means of building variant codecs to that of
+-- | `variantMatch`, often for cases where the codec is being constructed
+-- | with a fold or some other similar technique.
 -- |
 -- |```purescript
 -- | codecMaybe ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
@@ -85,6 +126,8 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   coerceR ∷ Variant r → Variant r'
   coerceR = unsafeCoerce
 
+-- | The class used to enable the building of `Variant` codecs from a record of
+-- | codecs.
 class VariantCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
   variantCodec ∷ RLProxy rl → Record ri → JsonCodec (Variant ro)
 
@@ -106,11 +149,3 @@ instance variantCodecCons ∷
 
     tail ∷ JsonCodec (Variant ro')
     tail = variantCodec (RLProxy ∷ RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
-
-variantMatch
-  ∷ ∀ rl ri ro
-  . RL.RowToList ri rl
-  ⇒ VariantCodec rl ri ro
-  ⇒ Record ri
-  → JsonCodec (Variant ro)
-variantMatch = variantCodec (RLProxy ∷ RLProxy rl)
