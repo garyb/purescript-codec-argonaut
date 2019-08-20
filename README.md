@@ -180,6 +180,32 @@ The library provides a [`Data.Codec.Argonaut.Common`](https://pursuit.purescript
 
 There is also a [`Data.Codec.Argonaut.Compat`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Compat) module provided for codecs that need to preserve compatibility with the encoding using by [`purescript-argonaut-codecs`](https://github.com/purescript-contrib/purescript-argonaut-codecs). These codecs have some issues, like the inability to accurately encode nested `Maybe`s, so if possible, `Common` should be preferred.
 
+### Newtypes
+
+If you have a codec for a `newtype` with a [`Newtype`](https://pursuit.purescript.org/packages/purescript-newtype/docs/Data.Newtype#t:Newtype) instance, you can use the [`wrapIso`](https://pursuit.purescript.org/packages/purescript-profunctor/docs/Data.Profunctor#v:wrapIso) function from [`purescript-profunctor`](https://github.com/purescript/purescript-profunctor) to adapt a codec to work with the `newtype`. For example:
+
+``` purescript
+import Data.Codec.Argonaut.Common as CA
+import Data.Codec.Argonaut.Record as CAR
+import Data.Newtype (class Newtype)
+import Data.Profunctor (wrapIso)
+
+type PersonRec = { "Name" ∷ String, age ∷ Int, "is active" ∷ Boolean }
+
+newtype Person = Person PersonRec
+
+derive instance newtypePerson ∷ Newtype Person _
+
+codec ∷ CA.JsonCodec Person
+codec =
+  wrapIso Person
+    (CAR.object "Person"
+      { "Name": CA.string
+      , age: CA.int
+      , "is active": CA.boolean
+      })
+```
+
 ### "Prismatic" codecs
 
 If you have a type with a pair of functions like the `preview` and `view` that make up a prism (`preview :: a -> Maybe b`, `view :: b -> a`), you can use these to adapt an existing codec to further refine it.
