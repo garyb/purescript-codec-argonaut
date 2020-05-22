@@ -6,7 +6,7 @@ module Data.Codec.Argonaut.Common
 import Prelude hiding (map)
 
 import Data.Array as A
-import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, string, (<~<), (~))
+import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, recordPropOptional, string, (<~<), (~))
 import Data.Codec.Argonaut.Sum (taggedSum)
 import Data.Either (Either(..))
 import Data.Functor as F
