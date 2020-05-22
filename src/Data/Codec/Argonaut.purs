@@ -34,7 +34,6 @@ import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Writer (Writer, writer, mapWriter)
 import Data.Argonaut.Core as J
 import Data.Array as A
-import Data.Bifunctor (lmap)
 import Data.Bifunctor as BF
 import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
 import Data.Codec (decode, encode, (~), (<~<), (>~>)) as Exports
@@ -306,7 +305,7 @@ recordPropOptional p codecA codecR =
     dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
     dec' key = ReaderT \obj → do
       r ← decode codecR obj
-      a ← lmap (AtKey key) case FO.lookup key obj of
+      a ← BF.lmap (AtKey key) case FO.lookup key obj of
         Just val → Just <$> decode codecA val
         _ → Right Nothing
       pure $ unsafeSet key a r
