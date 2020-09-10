@@ -3,6 +3,7 @@ module Data.Codec.Argonaut.Generic where
 import Prelude
 
 import Control.Alt ((<|>))
+import Control.Monad.Except (except)
 import Data.Argonaut.Core as J
 import Data.Codec as C
 import Data.Codec.Argonaut as CA
@@ -21,10 +22,10 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 -- | encode (nullarySum "MySum") Ctor1 == J.fromString "Ctor1"
 -- | decode (nullarySum "MySum") (J.fromString "MoarCtors") == Right MoarCtors
 -- |```
-nullarySum ∷ ∀ a r. Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodec a
+nullarySum ∷ ∀ m a r. Monad m ⇒ Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodecT m a
 nullarySum name =
   C.basicCodec
-    (map to <<< nullarySumDecode name)
+    (except <<< map to <<< nullarySumDecode name)
     (nullarySumEncode <<< from)
 
 class NullarySumCodec r where

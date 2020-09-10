@@ -2,11 +2,13 @@ module Data.Codec.Argonaut.Variant where
 
 import Prelude
 
+import Control.Monad.Except (ExceptT, except)
 import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Writer (Writer, writer)
 import Data.Argonaut.Core as J
 import Data.Codec (GCodec(..))
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), decode, encode, jobject, json, prop, string)
+import Data.Codec as C
+import Data.Codec.Argonaut (JsonCodecT, JsonDecodeError(..), encode, jobject, json, prop, string)
 import Data.Either (Either(..))
 import Data.Newtype (un)
 import Data.Profunctor.Star (Star(..))
@@ -55,11 +57,12 @@ import Unsafe.Coerce (unsafeCoerce)
 -- |     }
 -- |```
 variantMatch
-  ∷ ∀ rl ri ro
-  . RL.RowToList ri rl
-  ⇒ VariantCodec rl ri ro
+  ∷ ∀ m rl ri ro
+  . Monad m
+  ⇒ RL.RowToList ri rl
+  ⇒ VariantCodec rl ri ro m
   ⇒ Record ri
-  → JsonCodec (Variant ro)
+  → JsonCodecT m (Variant ro)
 variantMatch = variantCodec (RLProxy ∷ RLProxy rl)
 
 -- | Builds codecs for variants in combination with `variantCase`.
@@ -85,30 +88,31 @@ variantMatch = variantCodec (RLProxy ∷ RLProxy rl)
 -- |   _Just = SProxy ∷ SProxy "just"
 -- |   _Nothing = SProxy ∷ SProxy "nothing"
 -- |```
-variant ∷ JsonCodec (Variant ())
-variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
+variant ∷ ∀ m. Monad m ⇒ JsonCodecT m (Variant ())
+variant = GCodec (ReaderT \j → except (Left (UnexpectedValue j))) (Star case_)
 
 variantCase
-  ∷ ∀ l a r r'
-  . IsSymbol l
+  ∷ ∀ m l a r r'
+  . Monad m
+  ⇒ IsSymbol l
   ⇒ R.Cons l a r r'
   ⇒ SProxy l
-  → Either a (JsonCodec a)
-  → JsonCodec (Variant r)
-  → JsonCodec (Variant r')
+  → Either a (JsonCodecT m a)
+  → JsonCodecT m (Variant r)
+  → JsonCodecT m (Variant r')
 variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   where
 
-  dec' ∷ ReaderT J.Json (Either JsonDecodeError) (Variant r')
+  dec' ∷ ReaderT J.Json (ExceptT JsonDecodeError m) (Variant r')
   dec' = ReaderT \j → do
-    obj ← decode jobject j
-    tag ← decode (prop "tag" string) obj
+    obj ← C.decode jobject j
+    tag ← C.decode (prop "tag" string) obj
     if tag == reflectSymbol proxy
       then case eacodec of
         Left a → pure (inj proxy a)
         Right codec → do
-          value ← decode (prop "value" json) obj
-          inj proxy <$> decode codec value
+          value ← C.decode (prop "value" json) obj
+          inj proxy <$> C.decode codec value
       else coerceR <$> runReaderT dec j
 
   enc' ∷ Star (Writer J.Json) (Variant r') (Variant r')
@@ -120,7 +124,7 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
           _ ← FOST.poke "tag" (encode string (reflectSymbol proxy)) obj
           case eacodec of
             Left _ → pure obj
-            Right codec → FOST.poke "value" (encode codec v') obj)
+            Right codec → FOST.poke "value" (C.encode codec v') obj)
       (\v' → un Star enc v' $> v) v
 
   coerceR ∷ Variant r → Variant r'
@@ -128,24 +132,25 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
 
 -- | The class used to enable the building of `Variant` codecs from a record of
 -- | codecs.
-class VariantCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
-  variantCodec ∷ RLProxy rl → Record ri → JsonCodec (Variant ro)
+class VariantCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) m | rl → ri ro where
+  variantCodec ∷ RLProxy rl → Record ri → JsonCodecT m (Variant ro)
 
-instance variantCodecNil ∷ VariantCodec RL.Nil () () where
+instance variantCodecNil ∷ Monad m ⇒ VariantCodec RL.Nil () () m where
   variantCodec _ _ = variant
 
 instance variantCodecCons ∷
-  ( VariantCodec rs ri' ro'
-  , R.Cons sym (Either a (JsonCodec a)) ri' ri
+  ( Monad m
+  , VariantCodec rs ri' ro' m
+  , R.Cons sym (Either a (JsonCodecT m a)) ri' ri
   , R.Cons sym a ro' ro
   , IsSymbol sym
-  , TE.TypeEquals co (Either a (JsonCodec a))
-  ) ⇒ VariantCodec (RL.Cons sym co rs) ri ro where
+  , TE.TypeEquals co (Either a (JsonCodecT m a))
+  ) ⇒ VariantCodec (RL.Cons sym co rs) ri ro m where
   variantCodec _ codecs =
     variantCase (SProxy ∷ SProxy sym) codec tail
     where
-    codec ∷ Either a (JsonCodec a)
+    codec ∷ Either a (JsonCodecT m a)
     codec = TE.from (Rec.get (SProxy ∷ SProxy sym) codecs)
 
-    tail ∷ JsonCodec (Variant ro')
+    tail ∷ JsonCodecT m (Variant ro')
     tail = variantCodec (RLProxy ∷ RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)

@@ -7,17 +7,17 @@ module Data.Codec.Argonaut.Compat
 
 import Prelude
 
+import Control.Monad.Except (ExceptT, withExceptT)
 import Data.Argonaut.Core as J
-import Data.Bifunctor as BF
 import Data.Codec (basicCodec, mapCodec)
-import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prop, record, recordProp, recordPropOptional, string, (<~<), (~))
+import Data.Codec as C
+import Data.Codec.Argonaut (JIndexedCodec, JIndexedCodecT, JPropCodec, JPropCodecT, JsonCodec, JsonCodecT, JsonDecodeError(..), array, boolean, char, codePoint, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, string, (<~<), (>~>), (~))
 import Data.Codec.Argonaut.Common (either, list, map, tuple) as Common
-import Data.Either (Either)
 import Data.Functor as F
 import Data.Maybe (Maybe(..))
-import Foreign.Object as FO
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
+import Foreign.Object as FO
 
 -- | A codec for `Maybe` values.
 -- |
@@ -25,17 +25,17 @@ import Data.Tuple (Tuple(..))
 -- |
 -- | Note: this codec cannot represent nested `Maybe` values in a lossless
 -- | manner.
-maybe ∷ ∀ a. JsonCodec a → JsonCodec (Maybe a)
+maybe ∷ ∀ m a. Monad m ⇒ JsonCodecT m a → JsonCodecT m (Maybe a)
 maybe codec = basicCodec dec enc
   where
-  dec ∷ J.Json → Either JsonDecodeError (Maybe a)
+  dec ∷ J.Json → ExceptT JsonDecodeError m (Maybe a)
   dec j
     | J.isNull j = pure Nothing
-    | otherwise = BF.bimap (Named "Maybe") Just ((decode codec j))
+    | otherwise = withExceptT (Named "Maybe") (Just <$> (C.decode codec j))
   enc ∷ Maybe a → J.Json
   enc = case _ of
     Nothing → J.jsonNull
-    Just a → encode codec a
+    Just a → C.encode codec a
 
 -- | A codec for `StrMap` values.
 -- |
@@ -44,15 +44,15 @@ maybe codec = basicCodec dec enc
 -- | ```purescript
 -- | encode (foreignObject int) (Foreign.Object.fromFoldable [Tuple "a" 1, Tuple "b" 2]) == "{ \"a\": 1, \"b\": 2}"
 -- | ```
-foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (FO.Object a)
+foreignObject ∷ ∀ m a. Monad m ⇒ JsonCodecT m a → JsonCodecT m (FO.Object a)
 foreignObject codec =
   mapCodec
-    (BF.lmap (Named "StrMap") <<< F.map fromArray <<< traverse decodeItem <<< FO.toUnfoldable)
-    (F.map (encode codec))
+    (withExceptT (Named "StrMap") <<< F.map fromArray <<< traverse decodeItem <<< FO.toUnfoldable)
+    (F.map (C.encode codec))
     jobject
   where
   fromArray ∷ ∀ v. Array (Tuple String v) → FO.Object v
   fromArray = FO.fromFoldable
-  decodeItem ∷ Tuple String J.Json → Either JsonDecodeError (Tuple String a)
+  decodeItem ∷ Tuple String J.Json → ExceptT JsonDecodeError m (Tuple String a)
   decodeItem (Tuple key value) =
-    BF.bimap (AtKey key) (Tuple key) (decode codec value)
+    withExceptT (AtKey key) (Tuple key <$> C.decode codec value)

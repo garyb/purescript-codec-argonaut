@@ -47,16 +47,16 @@ instance eqOuter ∷ Eq Outer where
 outerCodec ∷ JA.JsonCodec OuterR
 outerCodec =
   JA.object "Outer" $ JAR.record
-    { a: JA.int
-    , b: JA.string
+    { a: JA.int ∷ JA.JsonCodec _
+    , b: JA.string ∷ JA.JsonCodec _
     , c: JA.maybe innerCodec
     }
 
 innerCodec ∷ JA.JsonCodec InnerR
 innerCodec =
   JA.object "Inner" $ JAR.record
-    { n: JA.int
-    , m: JA.boolean
+    { n: JA.int ∷ JA.JsonCodec _
+    , m: JA.boolean ∷ JA.JsonCodec _
     }
 
 genOuter ∷ Gen OuterR

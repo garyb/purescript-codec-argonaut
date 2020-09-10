@@ -58,7 +58,7 @@ import Prelude
 
 import Data.Argonaut.Core as J
 import Data.Codec (basicCodec)
-import Data.Codec.Argonaut (JsonCodec)
+import Data.Codec.Argonaut (JsonCodecT)
 import Data.Maybe (Maybe(..), maybe, fromMaybe)
 import Foreign.Object as FO
 import Foreign.Object.ST as FOST
@@ -67,24 +67,24 @@ import Data.Tuple (Tuple(..), uncurry)
 -- | When dealing with a JSON object that may be missing a field, this codec
 -- | can be used to alter the JSON before parsing to ensure a default value is
 -- | present instead.
-addDefaultField ∷ String → J.Json → JsonCodec J.Json
+addDefaultField ∷ ∀ m. Monad m ⇒ String → J.Json → JsonCodecT m J.Json
 addDefaultField field = addDefaultOrUpdateField field <<< fromMaybe
 
 -- | Re-maps the value of a field in a JSON object.
-updateField ∷ String → (J.Json → J.Json) → JsonCodec J.Json
+updateField ∷ ∀ m. Monad m ⇒ String → (J.Json → J.Json) → JsonCodecT m J.Json
 updateField field = alterField field <<< map
 
 -- | When dealing with a JSON object that may be missing a field, this codec
 -- | can be used to alter the JSON before parsing to ensure a default value is
 -- | present instead. Similar to `addDefaultField`, but allows existing values
 -- | to be modified also.
-addDefaultOrUpdateField ∷ String → (Maybe J.Json → J.Json) → JsonCodec J.Json
+addDefaultOrUpdateField ∷ ∀ m. Monad m ⇒ String → (Maybe J.Json → J.Json) → JsonCodecT m J.Json
 addDefaultOrUpdateField field = alterField field <<< map Just
 
 -- | When dealing with a JSON object that has had a field name changed, this
 -- | codec can be used to alter the JSON before parsing to ensure the new field
 -- | name is used instead
-renameField ∷ String → String → JsonCodec J.Json
+renameField ∷ ∀ m. Monad m ⇒ String → String → JsonCodecT m J.Json
 renameField oldName newName = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
@@ -112,7 +112,7 @@ renameField oldName newName = basicCodec (pure <<< dec) identity
 -- |
 -- | If the tag field is missing from the input, it will also be missing in the
 -- | output.
-nestForTagged ∷ JsonCodec J.Json
+nestForTagged ∷ ∀ m. Monad m ⇒ JsonCodecT m J.Json
 nestForTagged = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
@@ -132,7 +132,7 @@ nestForTagged = basicCodec (pure <<< dec) identity
     Just (Tuple valueValue obj') | FO.isEmpty obj' → valueValue
     _ → J.fromObject obj
 
-alterField ∷ String → (Maybe J.Json → Maybe J.Json) → JsonCodec J.Json
+alterField ∷ ∀ m. Monad m ⇒ String → (Maybe J.Json → Maybe J.Json) → JsonCodecT m J.Json
 alterField field f = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
