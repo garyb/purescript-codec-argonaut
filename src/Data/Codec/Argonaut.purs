@@ -34,7 +34,7 @@ import Control.Monad.Writer (Writer, writer, mapWriter)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
-import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
+import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode, hoistCodec)
 import Data.Codec (decode, encode, (~), (<~<), (>~>)) as Exports
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
@@ -329,7 +329,7 @@ fix f =
 -- |
 -- | ```purescript
 -- | nonEmptyString ∷ CA.JsonCodec NES.NonEmptyString
--- | nonEmptyString = CA.prismaticCodec NES.fromString NES.toString CA.string
+-- | nonEmptyString = CA.prismaticCodec "NonEmptyString" NES.fromString NES.toString CA.string
 -- | ```
 -- |
 -- | Another example might be to handle a mapping from a small sum type to
@@ -339,7 +339,7 @@ fix f =
 -- | data Direction = North | South | West | East
 -- |
 -- | directionCodec :: JsonCodec Direction
--- | directionCodec = prismaticCodec dec enc string
+-- | directionCodec = CA.prismaticCodec "Direction" dec enc string
 -- |   where
 -- |     dec = case _ of
 -- |       "N" -> Just North
@@ -357,8 +357,9 @@ fix f =
 -- |
 -- | Although for this latter case there are some other options too, in the form
 -- | of `Data.Codec.Argonaut.Generic.nullarySum` and `Data.Codec.Argonaut.Sum.enumSum`.
-prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
-prismaticCodec f g orig =
-  basicCodec
-    (\json' → note (UnexpectedValue json') <<< f =<< decode orig json')
-    (encode orig <<< g)
+prismaticCodec ∷ ∀ a b . String → (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
+prismaticCodec name decodeFn encodeFn origCodec =
+    hoistCodec (BF.lmap (Named name)) $
+    basicCodec
+    (\json' → note (UnexpectedValue json') <<< decodeFn =<< decode origCodec json')
+    (encode origCodec <<< encodeFn)
