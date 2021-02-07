@@ -128,7 +128,7 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
 
 -- | The class used to enable the building of `Variant` codecs from a record of
 -- | codecs.
-class VariantCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
+class VariantCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) | rl → ri ro where
   variantCodec ∷ RLProxy rl → Record ri → JsonCodec (Variant ro)
 
 instance variantCodecNil ∷ VariantCodec RL.Nil () () where
