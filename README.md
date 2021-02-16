@@ -26,11 +26,24 @@ import Data.Argonaut.Core as J
 import Data.Codec.Argonaut as CA
 import Data.Either (Either)
 
-encodeString ∷ String → J.Json
-encodeString = CA.encode CA.string
+codec = CA.array CA.string
 
-decodeString ∷ J.Json → Either CA.JsonDecodeError String
-decodeString = CA.decode CA.string
+encodeStringArray ∷ Array String → J.Json
+encodeStringArray = CA.encode codec
+
+decodeStringArray ∷ J.Json → Either CA.JsonDecodeError (Array String)
+decodeStringArray = CA.decode codec
+```
+
+To parse a serialized `String` into a `J.Json` structure use the [`Parser.jsonParser`](https://pursuit.purescript.org/packages/purescript-argonaut-core/5.1.0/docs/Data.Argonaut.Parser).
+
+To /"stringify"/ (serialize) your `Array String` to a serialized JSON `String` we would use the [`stringify`](https://pursuit.purescript.org/packages/purescript-argonaut-core/5.1.0/docs/Data.Argonaut.Core#v:stringify) like so:
+
+``` purescript
+import Control.Category ((>>>))
+
+serialize :: Array String -> String
+serialize = encodeStringArray >>> J.stringify
 ```
 
 ### Basic codecs
