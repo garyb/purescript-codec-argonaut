@@ -10,13 +10,13 @@ import Data.Either (Either(..))
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (dimap)
 import Data.String.Gen (genAsciiString)
-import Data.Symbol (SProxy(..))
 import Data.Variant as V
 import Effect (Effect)
 import Effect.Console (log)
 import Test.QuickCheck (quickCheck)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
+import Type.Proxy (Proxy(..))
 
 type TestVariant = V.Variant
   ( a ∷ Int
@@ -60,8 +60,8 @@ codecMaybe codecA =
   fromVariant = V.case_
     # V.on _Just Just
     # V.on _Nothing (const Nothing)
-  _Just = SProxy ∷ SProxy "just"
-  _Nothing = SProxy ∷ SProxy "nothing"
+  _Just = Proxy ∷ Proxy "just"
+  _Nothing = Proxy ∷ Proxy "nothing"
 
 codecMaybeMatch ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
 codecMaybeMatch codecA =
@@ -72,8 +72,8 @@ codecMaybeMatch codecA =
       })
   where
   toVariant = case _ of
-    Just a → V.inj (SProxy ∷ _ "just") a
-    Nothing → V.inj (SProxy ∷ _ "nothing") unit
+    Just a → V.inj (Proxy ∷ _ "just") a
+    Nothing → V.inj (Proxy ∷ _ "nothing") unit
   fromVariant = V.match
     { just: Just
     , nothing: \_ → Nothing
@@ -92,16 +92,16 @@ codecEither codecA codecB =
   fromVariant = V.case_
     # V.on _Left Left
     # V.on _Right Right
-  _Left = SProxy ∷ SProxy "left"
-  _Right = SProxy ∷ SProxy "right"
+  _Left = Proxy ∷ Proxy "left"
+  _Right = Proxy ∷ Proxy "right"
 
 genVariant ∷ Gen TestVariant
 genVariant = do
   tag ← chooseInt 1 3
   case tag of
-    1 → V.inj (SProxy ∷ SProxy "a") <$> genInt
-    2 → V.inj (SProxy ∷ SProxy "b") <$> genAsciiString
-    _ → V.inj (SProxy ∷ SProxy "c") <$> GenC.genMaybe chooseBool
+    1 → V.inj (Proxy ∷ Proxy "a") <$> genInt
+    2 → V.inj (Proxy ∷ Proxy "b") <$> genAsciiString
+    _ → V.inj (Proxy ∷ Proxy "c") <$> GenC.genMaybe chooseBool
 
 codecVariant ∷ JA.JsonCodec TestVariant
 codecVariant = JAV.variantMatch

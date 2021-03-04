@@ -1,12 +1,12 @@
 module Data.Codec.Argonaut.Record where
 
 import Data.Codec.Argonaut as CA
-import Data.Symbol (class IsSymbol, SProxy(..))
+import Data.Symbol (class IsSymbol)
 import Prim.Row as R
 import Prim.RowList as RL
 import Record as Rec
-import Type.Data.RowList (RLProxy(..))
 import Type.Equality as TE
+import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | Constructs a `JsonCodec` for a `Record` from a name and a record of codecs.
@@ -36,12 +36,12 @@ record
   ⇒ RowListCodec rl ri ro
   ⇒ Record ri
   → CA.JPropCodec (Record ro)
-record = rowListCodec (RLProxy ∷ RLProxy rl)
+record = rowListCodec (Proxy ∷ Proxy rl)
 
 -- | The class used to enable the building of `Record` codecs by providing a
 -- | record of codecs.
-class RowListCodec (rl ∷ RL.RowList) (ri ∷ # Type) (ro ∷ # Type) | rl → ri ro where
-  rowListCodec ∷ RLProxy rl → Record ri → CA.JPropCodec (Record ro)
+class RowListCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) | rl → ri ro where
+  rowListCodec ∷ forall proxy. proxy rl → Record ri → CA.JPropCodec (Record ro)
 
 instance rowListCodecNil ∷ RowListCodec RL.Nil () () where
   rowListCodec _ _ = CA.record
@@ -54,10 +54,10 @@ instance rowListCodecCons ∷
   , TE.TypeEquals co (CA.JsonCodec a)
   ) ⇒ RowListCodec (RL.Cons sym co rs) ri ro where
   rowListCodec _ codecs =
-    CA.recordProp (SProxy ∷ SProxy sym) codec tail
+    CA.recordProp (Proxy ∷ Proxy sym) codec tail
     where
     codec ∷ CA.JsonCodec a
-    codec = TE.from (Rec.get (SProxy ∷ SProxy sym) codecs)
+    codec = TE.from (Rec.get (Proxy ∷ Proxy sym) codecs)
 
     tail ∷ CA.JPropCodec (Record ro')
-    tail = rowListCodec (RLProxy ∷ RLProxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
+    tail = rowListCodec (Proxy ∷ Proxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
