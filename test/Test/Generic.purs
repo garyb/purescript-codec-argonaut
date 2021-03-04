@@ -4,7 +4,7 @@ import Prelude
 
 import Data.Codec.Argonaut.Generic (nullarySum)
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
+import Data.Show.Generic (genericShow)
 import Effect (Effect)
 import Effect.Console (log)
 import Test.QuickCheck (quickCheck)

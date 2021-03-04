@@ -8,7 +8,8 @@ import Data.Codec as C
 import Data.Codec.Argonaut as CA
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic, Constructor(..), NoArguments(..), Sum(..), from, to)
-import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
+import Type.Proxy (Proxy(..))
 
 -- | Encodes nullary sums with a Generic instance as strings that match the constructor names.
 -- |
@@ -41,9 +42,9 @@ instance nullarySumCodecSum ∷ (NullarySumCodec a, NullarySumCodec b) ⇒ Nulla
 
 instance nullarySumCodecCtor ∷ IsSymbol name ⇒ NullarySumCodec (Constructor name NoArguments) where
   nullarySumEncode _ =
-    J.fromString $ reflectSymbol (SProxy ∷ SProxy name)
+    J.fromString $ reflectSymbol (Proxy ∷ Proxy name)
   nullarySumDecode name j = do
     tag ← note (CA.Named name (CA.TypeMismatch "String")) (J.toString j)
-    if tag /= reflectSymbol (SProxy ∷ SProxy name)
+    if tag /= reflectSymbol (Proxy ∷ Proxy name)
       then Left (CA.Named name (CA.UnexpectedValue j))
       else Right (Constructor NoArguments)

@@ -45,7 +45,7 @@ import Data.Maybe (Maybe(..), maybe, fromJust)
 import Data.Profunctor.Star (Star(..))
 import Data.String as S
 import Data.String.CodeUnits as SCU
-import Data.Symbol (class IsSymbol, SProxy, reflectSymbol)
+import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
 import Foreign.Object as FO
@@ -234,15 +234,15 @@ prop key codec = GCodec dec enc
 -- | `{ "name": "Karl", "age": 25 }` we would define a codec like this:
 -- | ```
 -- | import Data.Codec.Argonaut as CA
--- | import Data.Symbol (SProxy(..))
+-- | import Type.Proxy (Proxy(..))
 -- |
 -- | type Person = { name ∷ String, age ∷ Int }
 -- |
 -- | codecPerson ∷ CA.JsonCodec Person
 -- | codecPerson =
 -- |   CA.object "Person" $ CA.record
--- |     # CA.recordProp (SProxy :: _ "name") CA.string
--- |     # CA.recordProp (SProxy :: _ "age") CA.int
+-- |     # CA.recordProp (Proxy :: _ "name") CA.string
+-- |     # CA.recordProp (Proxy :: _ "age") CA.int
 -- | ```
 -- |
 -- | See also `Data.Codec.Argonaut.Record.object` for a more commonly useful
@@ -253,10 +253,10 @@ record = GCodec (pure {}) (Star \val → writer (Tuple val L.Nil))
 -- | Used with `record` to define codecs for record types that encode into JSON
 -- | objects of the same shape. See the comment on `record` for an example.
 recordProp
-  ∷ ∀ p a r r'
+  ∷ ∀ proxy p a r r'
   . IsSymbol p
   ⇒ Row.Cons p a r r'
-  ⇒ SProxy p
+  ⇒ proxy p
   → JsonCodec a
   → JPropCodec (Record r)
   → JPropCodec (Record r')

@@ -10,18 +10,18 @@ import Data.Char.Gen (genAsciiChar)
 import Data.Codec.Argonaut.Common ((~))
 import Data.Codec.Argonaut.Common as JA
 import Data.Generic.Rep (class Generic)
-import Data.Generic.Rep.Show (genericShow)
 import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
+import Data.Show.Generic (genericShow)
 import Data.String.Gen (genAsciiString)
-import Data.Symbol (SProxy(..))
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign.Object.Gen (genForeignObject)
 import Test.QuickCheck (Result, quickCheck)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec, propCodec', propCodec'')
+import Type.Proxy (Proxy(..))
 
 main :: Effect Unit
 main = do
@@ -102,9 +102,9 @@ codecObject =
 codecRecord ∷ JA.JsonCodec TestRecord
 codecRecord =
   JA.object "Test Record" $ JA.record
-    # JA.recordProp (SProxy ∷ SProxy "tag") JA.string
-    # JA.recordProp (SProxy ∷ SProxy "x") JA.int
-    # JA.recordProp (SProxy ∷ SProxy "y") JA.boolean
+    # JA.recordProp (Proxy ∷ Proxy "tag") JA.string
+    # JA.recordProp (Proxy ∷ Proxy "x") JA.int
+    # JA.recordProp (Proxy ∷ Proxy "y") JA.boolean
 
 propTestRecord ∷ JA.JsonCodec TestRecord → Gen Result
 propTestRecord = propCodec' checkEq print genRecord

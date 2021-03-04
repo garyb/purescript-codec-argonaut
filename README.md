@@ -21,7 +21,7 @@ bower install purescript-codec-argonaut
 
 As [`JsonCodec`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#t:JsonCodec)s are values, they need to be fed into the [`encode`](https://pursuit.purescript.org/packages/purescript-codec/docs/Data.Codec/#v:encode) or [`decode`](https://pursuit.purescript.org/packages/purescript-codec/docs/Data.Codec/#v:decode) function provided by [`Data.Codec`](https://pursuit.purescript.org/packages/purescript-codec/docs/Data.Codec) (and re-exported by [`Data.Codec.Argonaut`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut)):
 
-``` purescript
+```purescript
 import Data.Argonaut.Core as J
 import Data.Codec.Argonaut as CA
 import Data.Either (Either)
@@ -39,7 +39,7 @@ To parse a serialized `String` into a `J.Json` structure use the [`Parser.jsonPa
 
 To /"stringify"/ (serialize) your `Array String` to a serialized JSON `String` we would use the [`stringify`](https://pursuit.purescript.org/packages/purescript-argonaut-core/5.1.0/docs/Data.Argonaut.Core#v:stringify) like so:
 
-``` purescript
+```purescript
 import Control.Category ((>>>))
 
 serialize :: Array String -> String
@@ -60,7 +60,7 @@ So far so boring. Things only start getting interesting or useful when we can bu
 
 The simplest compound codec provided by the library is [`CA.array`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:array), which accepts another codec, and encodes/decodes an arbitrary length array where all the items match the inner codec. For example:
 
-``` purescript
+```purescript
 import Data.Codec.Argonaut as CA
 
 codec ∷ CA.JsonCodec (Array String)
@@ -71,7 +71,7 @@ codec = CA.array CA.string
 
 Probably the most useful compound codec is for `Record`, this will generally be the building block of most codecs. There are a few different ways to define these codecs, but the most convenient is the [`record`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Record#v:record) function provided by [`Data.Codec.Argonaut.Record`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Record):
 
-``` purescript
+```purescript
 import Data.Codec.Argonaut as CA
 import Data.Codec.Argonaut.Record as CAR
 
@@ -91,13 +91,13 @@ Note we also used a [`CA.object`](https://pursuit.purescript.org/packages/puresc
 
 The codec will encode/decode JSON objects of the same shape as the defining record. For example:
 
-``` json
+```json
 { "name": "Rashida", "age": 37, "active": true }
 ```
 
 It's possible to encode/decode records that include properties with spaces and/or symbols in the name, or reserved names, by quoting the fields in the type and definition:
 
-``` purescript
+```purescript
 type Person = { "Name" ∷ String, age ∷ Int, "is active" ∷ Boolean }
 
 codec ∷ CA.JsonCodec Person
@@ -116,7 +116,7 @@ This library comes with codec support for [`purescript-variant`](https://github.
 
 First of all, variants. Similar to the object/record case there are a few options for defining variant codecs, but most commonly they will be defined with [`variantMatch`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Variant#v:variantMatch) provided by [`Data.Codec.Argonaut.Variant`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Variant):
 
-``` purescript
+```purescript
 import Prelude
 
 import Data.Codec.Argonaut as CA
@@ -142,7 +142,7 @@ The fields in the record passed to [`CAV.variantMatch`](https://pursuit.purescri
 
 The variant codec is a little opinionated since there's no exactly corresponding JSON structure for sums. The encoding looks something like:
 
-``` json
+```json
 { "tag": <constructorName>, "value": <value> }
 ```
 
@@ -150,15 +150,15 @@ The variant codec is a little opinionated since there's no exactly corresponding
 
 Sum type encoding is usually handled by building a variant codec, and then using [`dimap`](https://pursuit.purescript.org/packages/purescript-profunctor/docs/Data.Profunctor#v:dimap) to inject into/project out of a corresponding sum type:
 
-``` purescript
+```purescript
 import Prelude
 
 import Data.Codec.Argonaut as CA
 import Data.Codec.Argonaut.Variant as CAV
 import Data.Either (Either(..))
 import Data.Profunctor (dimap)
-import Data.Symbol (SProxy(..))
 import Data.Variant as V
+import Type.Proxy (Proxy(..))
 
 data SomeValue2 = Str String | Int Int | Neither
 
@@ -171,9 +171,9 @@ codec =
     }
   where
     toVariant = case _ of
-      Str s → V.inj (SProxy ∷ _ "str") s
-      Int i → V.inj (SProxy ∷ _ "int") i
-      Neither → V.inj (SProxy ∷ _ "neither") unit
+      Str s → V.inj (Proxy ∷ _ "str") s
+      Int i → V.inj (Proxy ∷ _ "int") i
+      Neither → V.inj (Proxy ∷ _ "neither") unit
     fromVariant = V.match
       { str: Str
       , int: Int
@@ -181,7 +181,7 @@ codec =
       }
 ```
 
-This certainly is a little boilerplate-y, but at least when defining codecs this way you do gain the benefits of having a single definition that aligns the encoding and decoding behaviour. This means, assuming there are no mixups in  `toVariant`/`fromVariant`, the guaranteed roundtripping is preserved. Often it's not even possible to have mixups during `dimap`, since the sum constructor types will all differ.
+This certainly is a little boilerplate-y, but at least when defining codecs this way you do gain the benefits of having a single definition that aligns the encoding and decoding behaviour. This means, assuming there are no mixups in `toVariant`/`fromVariant`, the guaranteed roundtripping is preserved. Often it's not even possible to have mixups during `dimap`, since the sum constructor types will all differ.
 
 If you have a sum type that only consists of nullary constructors and it has a [`Generic`](https://pursuit.purescript.org/packages/purescript-generics-rep/docs/Data.Generic.Rep#t:Generic) instance defined, [`nullarySum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic#v:nullarySum) provided by [`Data.Codec.Argonaut.Generic`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic) can generate a codec that will encode the constructors as string values matching the constructor names in the JSON.
 
@@ -197,7 +197,7 @@ There is also a [`Data.Codec.Argonaut.Compat`](https://pursuit.purescript.org/pa
 
 If you have a codec for a `newtype` with a [`Newtype`](https://pursuit.purescript.org/packages/purescript-newtype/docs/Data.Newtype#t:Newtype) instance, you can use the [`wrapIso`](https://pursuit.purescript.org/packages/purescript-profunctor/docs/Data.Profunctor#v:wrapIso) function from [`purescript-profunctor`](https://github.com/purescript/purescript-profunctor) to adapt a codec to work with the `newtype`. For example:
 
-``` purescript
+```purescript
 import Data.Codec.Argonaut.Common as CA
 import Data.Codec.Argonaut.Record as CAR
 import Data.Newtype (class Newtype)
@@ -225,7 +225,7 @@ If you have a type with a pair of functions like the `preview` and `view` that m
 
 For example, to adapt the [`CA.string`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:string) codec to only work for `NonEmptyString`s:
 
-``` purescript
+```purescript
 import Data.Codec.Argonaut as CA
 import Data.String.NonEmpty (NonEmptyString)
 import Data.String.NonEmpty as NES
