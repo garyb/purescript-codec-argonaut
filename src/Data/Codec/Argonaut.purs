@@ -329,7 +329,7 @@ fix f =
 -- |
 -- | ```purescript
 -- | nonEmptyString ∷ CA.JsonCodec NES.NonEmptyString
--- | nonEmptyString = CA.prismaticCodec NES.fromString NES.toString CA.string
+-- | nonEmptyString = CA.prismaticCodec "NonEmptyString" NES.fromString NES.toString CA.string
 -- | ```
 -- |
 -- | Another example might be to handle a mapping from a small sum type to
@@ -339,7 +339,7 @@ fix f =
 -- | data Direction = North | South | West | East
 -- |
 -- | directionCodec :: JsonCodec Direction
--- | directionCodec = prismaticCodec dec enc string
+-- | directionCodec = CA.prismaticCodec "Direction" dec enc string
 -- |   where
 -- |     dec = case _ of
 -- |       "N" -> Just North
@@ -357,8 +357,8 @@ fix f =
 -- |
 -- | Although for this latter case there are some other options too, in the form
 -- | of `Data.Codec.Argonaut.Generic.nullarySum` and `Data.Codec.Argonaut.Sum.enumSum`.
-prismaticCodec ∷ ∀ a b. (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
-prismaticCodec f g orig =
+prismaticCodec ∷ ∀ a b. String → (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
+prismaticCodec name f g orig =
   basicCodec
-    (\json' → note (UnexpectedValue json') <<< f =<< decode orig json')
+    (\json' → note (Named name (UnexpectedValue json')) <<< f =<< decode orig json')
     (encode orig <<< g)
