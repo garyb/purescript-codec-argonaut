@@ -1,7 +1,7 @@
 # purescript-codec-argonaut
 
 [![Latest release](http://img.shields.io/github/release/garyb/purescript-codec-argonaut.svg)](https://github.com/garyb/purescript-codec-argonaut/releases)
-[![Build Status](https://travis-ci.org/garyb/purescript-codec-argonaut.svg?branch=master)](https://travis-ci.org/garyb/purescript-codec-argonaut)
+![Build Status](https://github.com/garyb/purescript-codec-argonaut/actions/workflows/ci.yml/badge.svg)
 
 Bi-directional codecs for [argonaut](https://github.com/purescript-contrib/purescript-argonaut-core).
 
