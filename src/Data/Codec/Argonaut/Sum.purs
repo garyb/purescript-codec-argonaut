@@ -43,10 +43,10 @@ enumSum printTag parseTag = GCodec dec enc
 -- | - The first argument is the name of the type being decoded, for error
 -- |   message purposes.
 -- | - The second argument maps a tag value to a string to use in the encoding.
--- | - The second argument maps a string back to a tag value during decoding.
--- | - The third argument returns either a constant value or a decoder function
+-- | - The third argument maps a string back to a tag value during decoding.
+-- | - The fourth argument returns either a constant value or a decoder function
 -- |   based on a tag value.
--- | - The fourth argument returns a tag value and optional encoded value to
+-- | - The fifth argument returns a tag value and optional encoded value to
 -- |   store for a constructor of the sum.
 taggedSum
   ∷ ∀ tag a
