@@ -7,7 +7,7 @@ Bi-directional codecs for [argonaut](https://github.com/purescript-contrib/pures
 
 This library is build on [`purescript-codec`](https://github.com/garyb/purescript-codec) and offers a different approach to dealing with JSON encoding/decoding than [`purescript-argonaut-codecs`](https://github.com/purescript-contrib/purescript-argonaut-codecs). Instead of using type classes, codecs are constructed as values explicitly. As long as the basic codec values provided by this library are used, the codecs are guaranteed to roundtrip successfully.
 
-The errors reported from this library are a little better than those provided by `purescript-argonaut-codecs` too - when used with `showJsonDecodeError` they show a helpful explanation of what when wrong and where.
+The errors reported from this library are a little better than those provided by `purescript-argonaut-codecs` too - when used with `showJsonDecodeError` they show a helpful explanation of what went wrong and where.
 
 For more information on the motivation behind this library, I [wrote a bit about my problems with typeclass codecs](http://code.slipthrough.net/2018/03/13/thoughts-on-typeclass-codecs/) previously.
 
