@@ -51,6 +51,7 @@ import Data.Tuple (Tuple(..))
 import Foreign.Object as FO
 import Partial.Unsafe (unsafePartial)
 import Prim.Row as Row
+import Type.Proxy (Proxy)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | Codec type for `Json` values.
@@ -253,10 +254,10 @@ record = GCodec (pure {}) (Star \val → writer (Tuple val L.Nil))
 -- | Used with `record` to define codecs for record types that encode into JSON
 -- | objects of the same shape. See the comment on `record` for an example.
 recordProp
-  ∷ ∀ proxy p a r r'
+  ∷ ∀ p a r r'
   . IsSymbol p
   ⇒ Row.Cons p a r r'
-  ⇒ proxy p
+  ⇒ Proxy p
   → JsonCodec a
   → JPropCodec (Record r)
   → JPropCodec (Record r')

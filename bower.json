@@ -16,14 +16,14 @@
     "package.json"
   ],
   "dependencies": {
-    "purescript-argonaut-core": "^6.0.0",
-    "purescript-codec": "^4.0.0",
-    "purescript-variant": "^7.0.1",
-    "purescript-ordered-collections": "^2.0.0",
+    "purescript-argonaut-core": "^7.0.0",
+    "purescript-codec": "https://github.com/thomashoneyman/purescript-codec.git#trh/purs-0.15",
+    "purescript-variant": "^8.0.0",
+    "purescript-ordered-collections": "^3.0.0",
     "purescript-type-equality": "^4.0.0"
   },
   "devDependencies": {
-    "purescript-argonaut-codecs": "^8.0.0",
-    "purescript-quickcheck": "^7.0.0"
+    "purescript-argonaut-codecs": "^9.0.0",
+    "purescript-quickcheck": "^8.0.0"
   }
 }
