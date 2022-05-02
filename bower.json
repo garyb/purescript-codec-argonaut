@@ -17,7 +17,7 @@
   ],
   "dependencies": {
     "purescript-argonaut-core": "^7.0.0",
-    "purescript-codec": "https://github.com/thomashoneyman/purescript-codec.git#trh/purs-0.15",
+    "purescript-codec": "^5.0.0",
     "purescript-variant": "^8.0.0",
     "purescript-ordered-collections": "^3.0.0",
     "purescript-type-equality": "^4.0.0"
