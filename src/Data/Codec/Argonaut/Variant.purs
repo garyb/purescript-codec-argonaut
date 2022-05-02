@@ -89,10 +89,10 @@ variant ∷ JsonCodec (Variant ())
 variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
 
 variantCase
-  ∷ ∀ proxy l a r r'
+  ∷ ∀ l a r r'
   . IsSymbol l
   ⇒ R.Cons l a r r'
-  ⇒ proxy l
+  ⇒ Proxy l
   → Either a (JsonCodec a)
   → JsonCodec (Variant r)
   → JsonCodec (Variant r')
