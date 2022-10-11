@@ -103,12 +103,14 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   dec' = ReaderT \j → do
     obj ← decode jobject j
     tag ← decode (prop "tag" string) obj
-    if tag == reflectSymbol proxy then case eacodec of
-      Left a → pure (inj proxy a)
-      Right codec → do
-        value ← decode (prop "value" json) obj
-        inj proxy <$> decode codec value
-    else coerceR <$> runReaderT dec j
+    if tag == reflectSymbol proxy then 
+      case eacodec of
+        Left a → pure (inj proxy a)
+        Right codec → do
+          value ← decode (prop "value" json) obj
+          inj proxy <$> decode codec value
+    else
+      coerceR <$> runReaderT dec j
 
   enc' ∷ Star (Writer J.Json) (Variant r') (Variant r')
   enc' = Star \v →
