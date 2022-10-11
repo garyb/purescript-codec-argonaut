@@ -11,8 +11,8 @@ import Data.Codec.Argonaut.Common ((~))
 import Data.Codec.Argonaut.Common as CA
 import Data.Either (Either(..), either, note)
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (Maybe(..))
 import Data.Int as Int
+import Data.Maybe (Maybe(..))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
@@ -27,7 +27,7 @@ import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec, propCodec', propCodec'')
 import Type.Proxy (Proxy(..))
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking JNull codec"
   quickCheck propNull
@@ -61,10 +61,10 @@ main = do
 
   log "Checking record codec with optional field"
   quickCheck propTestRecordOptional
-  
+
   log "Checking record codec with optional field does include the field"
   quickCheck propPresentOptionalField
-  
+
   log "Checking record codec with optional field does omit the field entirely"
   quickCheck propMissingOptionalField
 
@@ -118,14 +118,14 @@ codecRecord =
     # CA.recordProp (Proxy ∷ Proxy "tag") CA.string
     # CA.recordProp (Proxy ∷ Proxy "x") CA.int
     # CA.recordProp (Proxy ∷ Proxy "y") CA.boolean
-    
+
 propTestRecord ∷ CA.JsonCodec TestRecord → Gen Result
 propTestRecord = propCodec' checkEq print genRecord
   where
   checkEq r1 r2 = r1.tag == r2.tag && r1.x == r2.x && r1.y == r2.y
   print { tag, x, y } =
     "{ tag: " <> show tag <> ", x: " <> show x <> ", y: " <> show y <> " }"
-    
+
 type TestRecordOptional = { tag ∷ String, x ∷ Maybe Int }
 
 genRecordOptional ∷ Gen TestRecordOptional
@@ -145,10 +145,10 @@ propTestRecordOptional = propCodec' checkEq print genRecordOptional codecRecordO
   where
   checkEq r1 r2 = r1.tag == r2.tag && r1.x == r2.x
   print { tag, x } =
-    case x of 
-      Just x' → "{ tag: " <> show tag <> ", x: " <> show x <> " }"
+    case x of
+      Just _ → "{ tag: " <> show tag <> ", x: " <> show x <> " }"
       Nothing → "{ tag: " <> show tag <> " }"
-      
+
 propPresentOptionalField ∷ Gen Result
 propPresentOptionalField = do
   tag ← genAsciiString
@@ -159,10 +159,9 @@ propPresentOptionalField = do
     obj ← note "Encoded JSON is not an object" $ J.toObject json
     prop ← note "Optional property unexpectedly missing in object" $ Object.lookup "x" obj
     n ← note "x value is not a plain number" $ J.toNumber prop
-    if n == Int.toNumber x
-      then pure unit 
-      else Left "x value is wrong"
-      
+    if n == Int.toNumber x then pure unit
+    else Left "x value is wrong"
+
 propMissingOptionalField ∷ Gen Result
 propMissingOptionalField = do
   tag ← genAsciiString
@@ -176,13 +175,15 @@ newtype FixTest = FixTest (Maybe FixTest)
 
 derive instance newtypeFixTest ∷ Newtype FixTest _
 derive instance genericFixTest ∷ Generic FixTest _
-instance eqFixTest ∷ Eq FixTest where eq (FixTest x) (FixTest y) = x == y
-instance showFixTest ∷ Show FixTest where show x = genericShow x
+instance eqFixTest ∷ Eq FixTest where
+  eq (FixTest x) (FixTest y) = x == y
+
+instance showFixTest ∷ Show FixTest where
+  show x = genericShow x
 
 genFixTest ∷ Gen FixTest
 genFixTest = Gen.sized \n →
-  if n <= 1
-  then pure $ FixTest Nothing
+  if n <= 1 then pure $ FixTest Nothing
   else FixTest <$> Gen.resize (_ - 1) (GenC.genMaybe genFixTest)
 
 codecFixTest ∷ CA.JsonCodec FixTest

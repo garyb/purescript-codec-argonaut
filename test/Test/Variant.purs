@@ -24,7 +24,7 @@ type TestVariant = V.Variant
   , c ∷ Maybe Boolean
   )
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking Maybe-variant codec"
   quickCheck $
@@ -50,9 +50,10 @@ main = do
 codecMaybe ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
 codecMaybe codecA =
   dimap toVariant fromVariant
-    (JAV.variant
-      # JAV.variantCase _Just (Right codecA)
-      # JAV.variantCase _Nothing (Left unit))
+    ( JAV.variant
+        # JAV.variantCase _Just (Right codecA)
+        # JAV.variantCase _Nothing (Left unit)
+    )
   where
   toVariant = case _ of
     Just a → V.inj _Just a
@@ -66,10 +67,11 @@ codecMaybe codecA =
 codecMaybeMatch ∷ ∀ a. JA.JsonCodec a → JA.JsonCodec (Maybe a)
 codecMaybeMatch codecA =
   dimap toVariant fromVariant
-    (JAV.variantMatch
-      { just: Right codecA
-      , nothing: Left unit
-      })
+    ( JAV.variantMatch
+        { just: Right codecA
+        , nothing: Left unit
+        }
+    )
   where
   toVariant = case _ of
     Just a → V.inj (Proxy ∷ _ "just") a
@@ -82,9 +84,10 @@ codecMaybeMatch codecA =
 codecEither ∷ ∀ a b. JA.JsonCodec a → JA.JsonCodec b → JA.JsonCodec (Either a b)
 codecEither codecA codecB =
   dimap toVariant fromVariant
-    (JAV.variant
-      # JAV.variantCase _Left (Right codecA)
-      # JAV.variantCase _Right (Right codecB))
+    ( JAV.variant
+        # JAV.variantCase _Left (Right codecA)
+        # JAV.variantCase _Right (Right codecB)
+    )
   where
   toVariant = case _ of
     Left a → V.inj _Left a

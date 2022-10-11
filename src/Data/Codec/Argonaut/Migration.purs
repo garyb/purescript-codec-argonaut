@@ -59,10 +59,10 @@ import Prelude
 import Data.Argonaut.Core as J
 import Data.Codec (basicCodec)
 import Data.Codec.Argonaut (JsonCodec)
-import Data.Maybe (Maybe(..), maybe, fromMaybe)
+import Data.Maybe (Maybe(..), fromMaybe, maybe)
+import Data.Tuple (Tuple(..), uncurry)
 import Foreign.Object as FO
 import Foreign.Object.ST as FOST
-import Data.Tuple (Tuple(..), uncurry)
 
 -- | When dealing with a JSON object that may be missing a field, this codec
 -- | can be used to alter the JSON before parsing to ensure a default value is
@@ -89,6 +89,7 @@ renameField oldName newName = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< rename) j
+
   rename ∷ FO.Object J.Json → FO.Object J.Json
   rename obj = maybe obj (uncurry (FO.insert newName)) (FO.pop oldName obj)
 
@@ -117,6 +118,7 @@ nestForTagged = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< rewrite) j
+
   rewrite ∷ FO.Object J.Json → FO.Object J.Json
   rewrite obj =
     case FO.pop "tag" obj of
@@ -127,6 +129,7 @@ nestForTagged = basicCodec (pure <<< dec) identity
         result ← FOST.new
         _ ← FOST.poke "tag" tagValue result
         FOST.poke "value" (mkValue obj') result
+
   mkValue ∷ FO.Object J.Json → J.Json
   mkValue obj = case FO.pop "value" obj of
     Just (Tuple valueValue obj') | FO.isEmpty obj' → valueValue
@@ -137,5 +140,6 @@ alterField field f = basicCodec (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< setDefault) j
+
   setDefault ∷ FO.Object J.Json → FO.Object J.Json
   setDefault = FO.alter f field

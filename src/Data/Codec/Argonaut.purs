@@ -31,18 +31,18 @@ module Data.Codec.Argonaut
 import Prelude
 
 import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.Writer (Writer, writer, mapWriter)
+import Control.Monad.Writer (Writer, mapWriter, writer)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor as BF
 import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
-import Data.Codec (decode, encode, (~), (<~<), (>~>)) as Exports
+import Data.Codec (decode, encode, (<~<), (>~>), (~)) as Exports
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as I
 import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), maybe, fromJust)
+import Data.Maybe (Maybe(..), fromJust, maybe)
 import Data.Profunctor.Star (Star(..))
 import Data.String as S
 import Data.String.CodeUnits as SCU
@@ -73,25 +73,25 @@ derive instance genericJsonDecodeError ∷ Generic JsonDecodeError _
 
 instance showJsonDecodeError ∷ Show JsonDecodeError where
   show = case _ of
-    TypeMismatch s -> "(TypeMismatch " <> show s <> ")"
-    UnexpectedValue j -> "(UnexpectedValue " <> J.stringify j <> ")"
-    AtIndex i e -> "(AtIndex " <> show i <> " " <> show e <> ")"
-    AtKey k e -> "(AtKey " <> show k <> " " <> show e <> ")"
-    Named s e -> "(Named " <> show s <> " " <> show e <> ")"
-    MissingValue -> "MissingValue"
+    TypeMismatch s → "(TypeMismatch " <> show s <> ")"
+    UnexpectedValue j → "(UnexpectedValue " <> J.stringify j <> ")"
+    AtIndex i e → "(AtIndex " <> show i <> " " <> show e <> ")"
+    AtKey k e → "(AtKey " <> show k <> " " <> show e <> ")"
+    Named s e → "(Named " <> show s <> " " <> show e <> ")"
+    MissingValue → "MissingValue"
 
 -- | Prints a `JsonDecodeError` as a somewhat readable error message.
 printJsonDecodeError ∷ JsonDecodeError → String
 printJsonDecodeError err =
   "An error occurred while decoding a JSON value:\n" <> go err
   where
-    go = case _ of
-      TypeMismatch ty → "  Expected value of type '" <> ty <> "'."
-      UnexpectedValue val → "  Unexpected value " <> J.stringify val <> "."
-      AtIndex ix inner → "  At array index " <> show ix <> ":\n" <> go inner
-      AtKey key inner → "  At object key " <> key <> ":\n" <> go inner
-      Named name inner → "  Under '" <> name <> "':\n" <> go inner
-      MissingValue → "  No value was found."
+  go = case _ of
+    TypeMismatch ty → "  Expected value of type '" <> ty <> "'."
+    UnexpectedValue val → "  Unexpected value " <> J.stringify val <> "."
+    AtIndex ix inner → "  At array index " <> show ix <> ":\n" <> go inner
+    AtKey key inner → "  At object key " <> key <> ":\n" <> go inner
+    Named name inner → "  Under '" <> name <> "':\n" <> go inner
+    MissingValue → "  No value was found."
 
 -- | The "identity codec" for `Json` values.
 json ∷ JsonCodec J.Json
@@ -163,7 +163,8 @@ type JIndexedCodec a =
     (Either JsonDecodeError)
     (Array J.Json)
     (L.List J.Json)
-    a a
+    a
+    a
 
 -- | A codec for types that are encoded as an array with a specific layout.
 -- |
@@ -204,7 +205,8 @@ type JPropCodec a =
     (Either JsonDecodeError)
     (FO.Object J.Json)
     (L.List (Tuple String J.Json))
-    a a
+    a
+    a
 
 -- | A codec for objects that are encoded with specific properties.
 -- |
@@ -225,6 +227,7 @@ prop key codec = GCodec dec enc
     BF.lmap (AtKey key) case FO.lookup key obj of
       Just val → decode codec val
       Nothing → Left MissingValue
+
   enc ∷ Star (Writer (L.List (Tuple String J.Json))) a a
   enc = Star \val → writer $ Tuple val (pure (Tuple key (encode codec val)))
 
@@ -265,29 +268,33 @@ recordProp
 recordProp p codecA codecR =
   let key = reflectSymbol p in GCodec (dec' key) (enc' key)
   where
-    dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
-    dec' key = ReaderT \obj → do
-      r ← decode codecR obj
-      a ← BF.lmap (AtKey key) case FO.lookup key obj of
-        Just val → decode codecA val
-        Nothing → Left MissingValue
-      pure $ unsafeSet key a r
-    enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
-    enc' key = Star \val →
-      writer $ Tuple val
-        $ Tuple key (encode codecA (unsafeGet key val))
-        : encode codecR (unsafeForget val)
-    unsafeForget ∷ Record r' → Record r
-    unsafeForget = unsafeCoerce
-    unsafeSet ∷ String → a → Record r → Record r'
-    unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
-    unsafeGet ∷ String → Record r' → a
-    unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
-    
+  dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
+  dec' key = ReaderT \obj → do
+    r ← decode codecR obj
+    a ← BF.lmap (AtKey key) case FO.lookup key obj of
+      Just val → decode codecA val
+      Nothing → Left MissingValue
+    pure $ unsafeSet key a r
+
+  enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
+  enc' key = Star \val →
+    writer $ Tuple val
+      $ Tuple key (encode codecA (unsafeGet key val))
+          : encode codecR (unsafeForget val)
+
+  unsafeForget ∷ Record r' → Record r
+  unsafeForget = unsafeCoerce
+
+  unsafeSet ∷ String → a → Record r → Record r'
+  unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
+
+  unsafeGet ∷ String → Record r' → a
+  unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
+
 -- | Used with `record` to define an optional field.
 -- |
 -- | This will only decode the property as `Nothing` if the field does not exist
--- | in the object - having a values such as `null` assigned will need handling 
+-- | in the object - having a values such as `null` assigned will need handling
 -- | separately.
 -- |
 -- | The property will be omitted when encoding and the value is `Nothing`.
@@ -302,29 +309,33 @@ recordPropOptional
 recordPropOptional p codecA codecR =
   let key = reflectSymbol p in GCodec (dec' key) (enc' key)
   where
-    dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
-    dec' key = ReaderT \obj → do
-      r ← decode codecR obj
-      a ← BF.lmap (AtKey key) case FO.lookup key obj of
-        Just val → Just <$> decode codecA val
-        _ → Right Nothing
-      pure $ unsafeSet key a r
-    enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
-    enc' key = Star \val → do
-      let w = encode codecR (unsafeForget val)
-      writer $ Tuple val case unsafeGet key val of
-        Just a → Tuple key (encode codecA a) : w
-        Nothing → w
-    unsafeForget ∷ Record r' → Record r
-    unsafeForget = unsafeCoerce
-    unsafeSet ∷ String → Maybe a → Record r → Record r'
-    unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
-    unsafeGet ∷ String → Record r' → Maybe a
-    unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
+  dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
+  dec' key = ReaderT \obj → do
+    r ← decode codecR obj
+    a ← BF.lmap (AtKey key) case FO.lookup key obj of
+      Just val → Just <$> decode codecA val
+      _ → Right Nothing
+    pure $ unsafeSet key a r
+
+  enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
+  enc' key = Star \val → do
+    let w = encode codecR (unsafeForget val)
+    writer $ Tuple val case unsafeGet key val of
+      Just a → Tuple key (encode codecA a) : w
+      Nothing → w
+
+  unsafeForget ∷ Record r' → Record r
+  unsafeForget = unsafeCoerce
+
+  unsafeSet ∷ String → Maybe a → Record r → Record r'
+  unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
+
+  unsafeGet ∷ String → Record r' → Maybe a
+  unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
 
 jsonPrimCodec
   ∷ ∀ a
-   . String
+  . String
   → (J.Json → Maybe a)
   → (a → J.Json)
   → JsonCodec a

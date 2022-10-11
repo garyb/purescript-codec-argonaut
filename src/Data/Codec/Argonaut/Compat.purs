@@ -15,9 +15,9 @@ import Data.Codec.Argonaut.Common (either, list, map, tuple) as Common
 import Data.Either (Either)
 import Data.Functor as F
 import Data.Maybe (Maybe(..))
-import Foreign.Object as FO
 import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..))
+import Foreign.Object as FO
 
 -- | A codec for `Maybe` values.
 -- |
@@ -32,6 +32,7 @@ maybe codec = basicCodec dec enc
   dec j
     | J.isNull j = pure Nothing
     | otherwise = BF.bimap (Named "Maybe") Just ((decode codec j))
+
   enc ∷ Maybe a → J.Json
   enc = case _ of
     Nothing → J.jsonNull
@@ -53,6 +54,7 @@ foreignObject codec =
   where
   fromArray ∷ ∀ v. Array (Tuple String v) → FO.Object v
   fromArray = FO.fromFoldable
+
   decodeItem ∷ Tuple String J.Json → Either JsonDecodeError (Tuple String a)
   decodeItem (Tuple key value) =
     BF.bimap (AtKey key) (Tuple key) (decode codec value)

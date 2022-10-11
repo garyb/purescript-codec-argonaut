@@ -14,8 +14,8 @@ import Data.List as L
 import Data.Map as M
 import Data.Maybe (Maybe(..))
 import Data.Profunctor (dimap)
-import Foreign.Object as FO
 import Data.Tuple (Tuple(..), fst, snd)
+import Foreign.Object as FO
 
 -- | A codec for `Maybe` values.
 -- |
