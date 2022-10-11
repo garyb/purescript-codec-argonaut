@@ -19,8 +19,8 @@ import Prim.Row as R
 import Prim.RowList as RL
 import Record as Rec
 import Type.Equality as TE
-import Unsafe.Coerce (unsafeCoerce)
 import Type.Proxy (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | Builds a codec for a variant from a record, similar to the way
 -- | `Variant.match` works to pattern match on a variant.
@@ -103,25 +103,28 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   dec' = ReaderT \j → do
     obj ← decode jobject j
     tag ← decode (prop "tag" string) obj
-    if tag == reflectSymbol proxy
-      then case eacodec of
+    if tag == reflectSymbol proxy then 
+      case eacodec of
         Left a → pure (inj proxy a)
         Right codec → do
           value ← decode (prop "value" json) obj
           inj proxy <$> decode codec value
-      else coerceR <$> runReaderT dec j
+    else
+      coerceR <$> runReaderT dec j
 
   enc' ∷ Star (Writer J.Json) (Variant r') (Variant r')
   enc' = Star \v →
     on proxy
-      (\v' → writer $ Tuple v $ encode jobject $
-        FO.runST do
-          obj ← FOST.new
-          _ ← FOST.poke "tag" (encode string (reflectSymbol proxy)) obj
-          case eacodec of
-            Left _ → pure obj
-            Right codec → FOST.poke "value" (encode codec v') obj)
-      (\v' → un Star enc v' $> v) v
+      ( \v' → writer $ Tuple v $ encode jobject $
+          FO.runST do
+            obj ← FOST.new
+            _ ← FOST.poke "tag" (encode string (reflectSymbol proxy)) obj
+            case eacodec of
+              Left _ → pure obj
+              Right codec → FOST.poke "value" (encode codec v') obj
+      )
+      (\v' → un Star enc v' $> v)
+      v
 
   coerceR ∷ Variant r → Variant r'
   coerceR = unsafeCoerce
@@ -129,7 +132,7 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
 -- | The class used to enable the building of `Variant` codecs from a record of
 -- | codecs.
 class VariantCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) | rl → ri ro where
-  variantCodec ∷ forall proxy. proxy rl → Record ri → JsonCodec (Variant ro)
+  variantCodec ∷ ∀ proxy. proxy rl → Record ri → JsonCodec (Variant ro)
 
 instance variantCodecNil ∷ VariantCodec RL.Nil () () where
   variantCodec _ _ = variant
@@ -140,7 +143,8 @@ instance variantCodecCons ∷
   , R.Cons sym a ro' ro
   , IsSymbol sym
   , TE.TypeEquals co (Either a (JsonCodec a))
-  ) ⇒ VariantCodec (RL.Cons sym co rs) ri ro where
+  ) ⇒
+  VariantCodec (RL.Cons sym co rs) ri ro where
   variantCodec _ codecs =
     variantCase (Proxy ∷ Proxy sym) codec tail
     where

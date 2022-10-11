@@ -38,8 +38,8 @@ instance showOuter ∷ Show Outer where
 instance eqOuter ∷ Eq Outer where
   eq (Outer o1) (Outer o2) =
     o1.a == o2.a
-    && o1.b == o2.b
-    && case o1.c, o2.c of
+      && o1.b == o2.b
+      && case o1.c, o2.c of
         Nothing, Nothing → true
         Just i1, Just i2 → i1.n == i2.n && i1.m == i2.m
         _, _ → false

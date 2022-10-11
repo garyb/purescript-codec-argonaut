@@ -12,9 +12,9 @@ import Effect.Console (log)
 import Foreign.Object.Gen (genForeignObject)
 import Test.QuickCheck (Result, quickCheck)
 import Test.QuickCheck.Gen (Gen)
-import Test.Util (propCodec, genInt)
+import Test.Util (genInt, propCodec)
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking Maybe codec"
   quickCheck propMaybeCodec

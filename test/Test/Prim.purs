@@ -23,7 +23,7 @@ import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec, propCodec', propCodec'')
 import Type.Proxy (Proxy(..))
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking JNull codec"
   quickCheck propNull
@@ -117,13 +117,15 @@ newtype FixTest = FixTest (Maybe FixTest)
 
 derive instance newtypeFixTest ∷ Newtype FixTest _
 derive instance genericFixTest ∷ Generic FixTest _
-instance eqFixTest ∷ Eq FixTest where eq (FixTest x) (FixTest y) = x == y
-instance showFixTest ∷ Show FixTest where show x = genericShow x
+instance eqFixTest ∷ Eq FixTest where
+  eq (FixTest x) (FixTest y) = x == y
+
+instance showFixTest ∷ Show FixTest where
+  show x = genericShow x
 
 genFixTest ∷ Gen FixTest
 genFixTest = Gen.sized \n →
-  if n <= 1
-  then pure $ FixTest Nothing
+  if n <= 1 then pure $ FixTest Nothing
   else FixTest <$> Gen.resize (_ - 1) (GenC.genMaybe genFixTest)
 
 codecFixTest ∷ JA.JsonCodec FixTest

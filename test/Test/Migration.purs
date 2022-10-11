@@ -19,7 +19,7 @@ import Test.QuickCheck (Result(..), quickCheck, (===))
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genJObject, propCodec'')
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking addDefaultField adds a field if it is missing"
   quickCheck propDefaultFieldAdded
@@ -109,14 +109,14 @@ propNestForTaggedIdempotent ∷ Gen Result
 propNestForTaggedIdempotent = do
   propCodec'' J.stringify genTagged JAM.nestForTagged
   where
-    genTagged = do
-      tag ← genAsciiString
-      expectedValue ← GenJ.genJson
-      pure $ J.fromObject $
-        FO.fromFoldable
-          [ Tuple "tag" (J.fromString tag)
-          , Tuple "value" expectedValue
-          ]
+  genTagged = do
+    tag ← genAsciiString
+    expectedValue ← GenJ.genJson
+    pure $ J.fromObject $
+      FO.fromFoldable
+        [ Tuple "tag" (J.fromString tag)
+        , Tuple "value" expectedValue
+        ]
 
 testMigrationCodec
   ∷ { key ∷ String
