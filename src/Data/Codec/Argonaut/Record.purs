@@ -41,7 +41,7 @@ record = rowListCodec (Proxy ∷ Proxy rl)
 -- | The class used to enable the building of `Record` codecs by providing a
 -- | record of codecs.
 class RowListCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) | rl → ri ro where
-  rowListCodec ∷ forall proxy. proxy rl → Record ri → CA.JPropCodec (Record ro)
+  rowListCodec ∷ ∀ proxy. proxy rl → Record ri → CA.JPropCodec (Record ro)
 
 instance rowListCodecNil ∷ RowListCodec RL.Nil () () where
   rowListCodec _ _ = CA.record
@@ -52,7 +52,8 @@ instance rowListCodecCons ∷
   , R.Cons sym a ro' ro
   , IsSymbol sym
   , TE.TypeEquals co (CA.JsonCodec a)
-  ) ⇒ RowListCodec (RL.Cons sym co rs) ri ro where
+  ) ⇒
+  RowListCodec (RL.Cons sym co rs) ri ro where
   rowListCodec _ codecs =
     CA.recordProp (Proxy ∷ Proxy sym) codec tail
     where
