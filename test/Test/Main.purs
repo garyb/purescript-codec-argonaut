@@ -12,7 +12,7 @@ import Test.Prim as TestPrim
 import Test.Record as Record
 import Test.Variant as Variant
 
-main :: Effect Unit
+main ∷ Effect Unit
 main = do
   log "Checking Prim codecs"
   log "------------------------------------------------------------"
