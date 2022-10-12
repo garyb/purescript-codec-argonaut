@@ -103,7 +103,7 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
   dec' = ReaderT \j → do
     obj ← decode jobject j
     tag ← decode (prop "tag" string) obj
-    if tag == reflectSymbol proxy then 
+    if tag == reflectSymbol proxy then
       case eacodec of
         Left a → pure (inj proxy a)
         Right codec → do

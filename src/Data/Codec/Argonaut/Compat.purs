@@ -2,7 +2,7 @@
 module Data.Codec.Argonaut.Compat
   ( module Data.Codec.Argonaut.Compat
   , module Data.Codec.Argonaut
-  , module Common 
+  , module Common
   ) where
 
 import Prelude
