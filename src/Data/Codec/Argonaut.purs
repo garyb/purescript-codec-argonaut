@@ -22,6 +22,7 @@ module Data.Codec.Argonaut
   , prop
   , record
   , recordProp
+  , recordPropOptional
   , fix
   , prismaticCodec
   , module Exports
@@ -288,6 +289,48 @@ recordProp p codecA codecR =
   unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
 
   unsafeGet ∷ String → Record r' → a
+  unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
+
+-- | Used with `record` to define an optional field.
+-- |
+-- | This will only decode the property as `Nothing` if the field does not exist
+-- | in the object - having a values such as `null` assigned will need handling
+-- | separately.
+-- |
+-- | The property will be omitted when encoding and the value is `Nothing`.
+recordPropOptional
+  ∷ ∀ p a r r'
+  . IsSymbol p
+  ⇒ Row.Cons p (Maybe a) r r'
+  ⇒ Proxy p
+  → JsonCodec a
+  → JPropCodec (Record r)
+  → JPropCodec (Record r')
+recordPropOptional p codecA codecR =
+  let key = reflectSymbol p in GCodec (dec' key) (enc' key)
+  where
+  dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
+  dec' key = ReaderT \obj → do
+    r ← decode codecR obj
+    a ← BF.lmap (AtKey key) case FO.lookup key obj of
+      Just val → Just <$> decode codecA val
+      _ → Right Nothing
+    pure $ unsafeSet key a r
+
+  enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
+  enc' key = Star \val → do
+    let w = encode codecR (unsafeForget val)
+    writer $ Tuple val case unsafeGet key val of
+      Just a → Tuple key (encode codecA a) : w
+      Nothing → w
+
+  unsafeForget ∷ Record r' → Record r
+  unsafeForget = unsafeCoerce
+
+  unsafeSet ∷ String → Maybe a → Record r → Record r'
+  unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
+
+  unsafeGet ∷ String → Record r' → Maybe a
   unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
 
 jsonPrimCodec

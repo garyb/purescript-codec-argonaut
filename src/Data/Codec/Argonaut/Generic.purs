@@ -44,7 +44,7 @@ instance nullarySumCodecCtor ∷ IsSymbol name ⇒ NullarySumCodec (Constructor 
     J.fromString $ reflectSymbol (Proxy ∷ Proxy name)
   nullarySumDecode name j = do
     tag ← note (CA.Named name (CA.TypeMismatch "String")) (J.toString j)
-    if tag /= reflectSymbol (Proxy ∷ Proxy name) then 
+    if tag /= reflectSymbol (Proxy ∷ Proxy name) then
       Left (CA.Named name (CA.UnexpectedValue j))
     else
       Right (Constructor NoArguments)
