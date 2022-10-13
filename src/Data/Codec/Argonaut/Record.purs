@@ -1,6 +1,7 @@
 module Data.Codec.Argonaut.Record where
 
 import Data.Codec.Argonaut as CA
+import Data.Maybe (Maybe)
 import Data.Symbol (class IsSymbol)
 import Prim.Row as R
 import Prim.RowList as RL
@@ -8,6 +9,11 @@ import Record as Rec
 import Type.Equality as TE
 import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
+
+data Optional a = Optional (CA.JsonCodec a)
+
+unOptional ∷ ∀ a. Optional a → CA.JsonCodec a
+unOptional (Optional codec) = codec
 
 -- | Constructs a `JsonCodec` for a `Record` from a name and a record of codecs.
 -- | The name is used in the error message produced when decoding fails.
@@ -46,14 +52,29 @@ class RowListCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) 
 instance rowListCodecNil ∷ RowListCodec RL.Nil () () where
   rowListCodec _ _ = CA.record
 
-instance rowListCodecCons ∷
+instance rowListCodecConsOptional ∷
+  ( RowListCodec rs ri' ro'
+  , R.Cons sym (Optional a) ri' ri
+  , R.Cons sym (Maybe a) ro' ro
+  , IsSymbol sym
+  ) ⇒
+  RowListCodec (RL.Cons sym (Optional a) rs) ri ro where
+  rowListCodec _ codecs =
+    CA.recordPropOptional (Proxy ∷ Proxy sym) codec tail
+    where
+    codec ∷ CA.JsonCodec a
+    codec = TE.from (unOptional (Rec.get (Proxy ∷ Proxy sym) codecs))
+
+    tail ∷ CA.JPropCodec (Record ro')
+    tail = rowListCodec (Proxy ∷ Proxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
+
+else instance rowListCodecCons ∷
   ( RowListCodec rs ri' ro'
   , R.Cons sym (CA.JsonCodec a) ri' ri
   , R.Cons sym a ro' ro
   , IsSymbol sym
-  , TE.TypeEquals co (CA.JsonCodec a)
   ) ⇒
-  RowListCodec (RL.Cons sym co rs) ri ro where
+  RowListCodec (RL.Cons sym (CA.JsonCodec a) rs) ri ro where
   rowListCodec _ codecs =
     CA.recordProp (Proxy ∷ Proxy sym) codec tail
     where

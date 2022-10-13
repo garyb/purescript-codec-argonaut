@@ -5,15 +5,18 @@ import Prelude
 import Control.Monad.Gen as Gen
 import Control.Monad.Gen.Common as GenC
 import Data.Argonaut.Core (stringify)
-import Data.Codec.Argonaut.Common as JA
-import Data.Codec.Argonaut.Record as JAR
-import Data.Maybe (Maybe(..))
+import Data.Argonaut.Core as Json
+import Data.Codec.Argonaut.Common as CA
+import Data.Codec.Argonaut.Record as CAR
+import Data.Maybe (Maybe(..), fromJust)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
 import Data.String.Gen (genAsciiString)
 import Effect (Effect)
 import Effect.Console (log)
-import Test.QuickCheck (quickCheck)
+import Foreign.Object as Object
+import Partial.Unsafe (unsafePartial)
+import Test.QuickCheck (assertEquals, quickCheck, quickCheckGen)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
 
@@ -26,6 +29,7 @@ type OuterR =
 type InnerR =
   { n ∷ Int
   , m ∷ Boolean
+  , o ∷ Maybe Boolean
   }
 
 newtype Outer = Outer OuterR
@@ -33,7 +37,7 @@ newtype Outer = Outer OuterR
 derive instance newtypeOuter ∷ Newtype Outer _
 
 instance showOuter ∷ Show Outer where
-  show (Outer r) = "Outer " <> stringify (JA.encode outerCodec r)
+  show (Outer r) = "Outer " <> stringify (CA.encode outerCodec r)
 
 instance eqOuter ∷ Eq Outer where
   eq (Outer o1) (Outer o2) =
@@ -44,19 +48,20 @@ instance eqOuter ∷ Eq Outer where
         Just i1, Just i2 → i1.n == i2.n && i1.m == i2.m
         _, _ → false
 
-outerCodec ∷ JA.JsonCodec OuterR
+outerCodec ∷ CA.JsonCodec OuterR
 outerCodec =
-  JA.object "Outer" $ JAR.record
-    { a: JA.int
-    , b: JA.string
-    , c: JA.maybe innerCodec
+  CA.object "Outer" $ CAR.record
+    { a: CA.int
+    , b: CA.string
+    , c: CA.maybe innerCodec
     }
 
-innerCodec ∷ JA.JsonCodec InnerR
+innerCodec ∷ CA.JsonCodec InnerR
 innerCodec =
-  JA.object "Inner" $ JAR.record
-    { n: JA.int
-    , m: JA.boolean
+  CA.object "Inner" $ CAR.record
+    { n: CA.int
+    , m: CA.boolean
+    , o: CAR.Optional CA.boolean
     }
 
 genOuter ∷ Gen OuterR
@@ -70,9 +75,25 @@ genInner ∷ Gen InnerR
 genInner = do
   n ← genInt
   m ← Gen.chooseBool
-  pure { n, m }
+  o ← GenC.genMaybe Gen.chooseBool
+  pure { n, m, o }
 
 main ∷ Effect Unit
 main = do
   log "Checking record codec"
   quickCheck $ propCodec (Outer <$> genOuter) (dimap unwrap wrap outerCodec)
+
+  log "Check optional Nothing is missing from json"
+  quickCheckGen do
+    v ← genInner
+    let obj = unsafePartial $ fromJust $ Json.toObject $ CA.encode innerCodec (v { o = Nothing })
+    pure $ assertEquals [ "m", "n" ] (Object.keys obj)
+
+  log "Check optional Just is present in the json"
+  quickCheckGen do
+    b ← Gen.chooseBool
+    v ← genInner
+    let obj = unsafePartial $ fromJust $ Json.toObject $ CA.encode innerCodec (v { o = Just b })
+    pure $ assertEquals [ "m", "n", "o" ] (Object.keys obj)
+
+  pure unit
