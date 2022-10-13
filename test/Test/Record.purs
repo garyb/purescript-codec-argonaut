@@ -61,7 +61,7 @@ innerCodec =
   CA.object "Inner" $ CAR.record
     { n: CA.int
     , m: CA.boolean
-    , o: CAR.Optional CA.boolean
+    , o: CAR.optional CA.boolean
     }
 
 genOuter ∷ Gen OuterR

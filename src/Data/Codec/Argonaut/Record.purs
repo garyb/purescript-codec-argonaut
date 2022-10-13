@@ -6,14 +6,9 @@ import Data.Symbol (class IsSymbol)
 import Prim.Row as R
 import Prim.RowList as RL
 import Record as Rec
-import Type.Equality as TE
+import Safe.Coerce (coerce)
 import Type.Proxy (Proxy(..))
 import Unsafe.Coerce (unsafeCoerce)
-
-data Optional a = Optional (CA.JsonCodec a)
-
-unOptional ∷ ∀ a. Optional a → CA.JsonCodec a
-unOptional (Optional codec) = codec
 
 -- | Constructs a `JsonCodec` for a `Record` from a name and a record of codecs.
 -- | The name is used in the error message produced when decoding fails.
@@ -44,6 +39,19 @@ record
   → CA.JPropCodec (Record ro)
 record = rowListCodec (Proxy ∷ Proxy rl)
 
+-- | Used to wrap codec values provided in `record` to indicate the field is optional.
+-- |
+-- | This will only decode the property as `Nothing` if the field does not exist
+-- | in the object - having a values such as `null` assigned will need handling
+-- | separately.
+-- |
+-- | The property will be omitted when encoding and the value is `Nothing`.
+newtype Optional a = Optional (CA.JsonCodec a)
+
+-- | A lowercase alias for `Optional`, provided for stylistic reasons only.
+optional ∷ ∀ a. CA.JsonCodec a → Optional a
+optional = Optional
+
 -- | The class used to enable the building of `Record` codecs by providing a
 -- | record of codecs.
 class RowListCodec (rl ∷ RL.RowList Type) (ri ∷ Row Type) (ro ∷ Row Type) | rl → ri ro where
@@ -63,7 +71,7 @@ instance rowListCodecConsOptional ∷
     CA.recordPropOptional (Proxy ∷ Proxy sym) codec tail
     where
     codec ∷ CA.JsonCodec a
-    codec = TE.from (unOptional (Rec.get (Proxy ∷ Proxy sym) codecs))
+    codec = coerce (Rec.get (Proxy ∷ Proxy sym) codecs ∷ Optional a)
 
     tail ∷ CA.JPropCodec (Record ro')
     tail = rowListCodec (Proxy ∷ Proxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
@@ -79,7 +87,7 @@ else instance rowListCodecCons ∷
     CA.recordProp (Proxy ∷ Proxy sym) codec tail
     where
     codec ∷ CA.JsonCodec a
-    codec = TE.from (Rec.get (Proxy ∷ Proxy sym) codecs)
+    codec = Rec.get (Proxy ∷ Proxy sym) codecs
 
     tail ∷ CA.JPropCodec (Record ro')
     tail = rowListCodec (Proxy ∷ Proxy rs) ((unsafeCoerce ∷ Record ri → Record ri') codecs)
