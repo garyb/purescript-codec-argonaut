@@ -115,7 +115,11 @@ codec =
 Objects with optional properties can be defined using the [`CAR.optional`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Record#v:optional): 
 
 ```purescript
-type Person = 
+import Data.Codec.Argonaut as CA
+import Data.Codec.Argonaut.Record as CAR
+import Data.Maybe (Maybe)
+
+type Person =
   { name ∷ String
   , age ∷ Int
   , active ∷ Boolean
@@ -258,7 +262,7 @@ import Data.String.NonEmpty (NonEmptyString)
 import Data.String.NonEmpty as NES
 
 codec ∷ CA.JsonCodec NonEmptyString
-codec = CA.prismaticCodec NES.fromString NES.toString CA.string
+codec = CA.prismaticCodec "NonEmptyString" NES.fromString NES.toString CA.string
 ```
 
 See the documentation for [another example](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) of how [`CA.prismaticCodec`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) might be used. The main downside to [`CA.prismaticCodec`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) is the error reporting for the `Nothing` case might not be good as it otherwise could be, since [`UnexpectedValue`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#t:JsonDecodeError) is the only information we have at that point.
