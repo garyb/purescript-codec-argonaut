@@ -1,4 +1,4 @@
-module Test.Example.Sum2 where
+module Test.Example.Sum1 where
 
 import Prelude
 
