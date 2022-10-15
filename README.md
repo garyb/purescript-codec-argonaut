@@ -35,9 +35,9 @@ decodeStringArray ∷ J.Json → Either CA.JsonDecodeError (Array String)
 decodeStringArray = CA.decode codec
 ```
 
-To parse a serialized `String` into a `J.Json` structure use the [`Parser.jsonParser`](https://pursuit.purescript.org/packages/purescript-argonaut-core/5.1.0/docs/Data.Argonaut.Parser).
+To parse a serialized `String` into a `J.Json` structure use the [`Parser.jsonParser`](https://pursuit.purescript.org/packages/purescript-argonaut-core/docs/Data.Argonaut.Parser).
 
-To /"stringify"/ (serialize) your `Array String` to a serialized JSON `String` we would use the [`stringify`](https://pursuit.purescript.org/packages/purescript-argonaut-core/5.1.0/docs/Data.Argonaut.Core#v:stringify) like so:
+To "stringify" (serialize) your `Array String` to a serialized JSON `String` we would use the [`stringify`](https://pursuit.purescript.org/packages/purescript-argonaut-core/docs/Data.Argonaut.Core#v:stringify) like so:
 
 ```purescript
 import Control.Category ((>>>))
@@ -109,6 +109,33 @@ codec =
       , "is active": CA.boolean
       })
 ```
+
+#### Optional properties
+
+Objects with optional properties can be defined using the [`CAR.optional`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Record#v:optional): 
+
+```purescript
+type Person = 
+  { name ∷ String
+  , age ∷ Int
+  , active ∷ Boolean
+  , email ∷ Maybe String
+  }
+
+codec ∷ CA.JsonCodec Person
+codec =
+  CA.object "Person"
+    (CAR.record
+      { name: CA.string
+      , age: CA.int
+      , active: CA.boolean
+      , email: CAR.optional CA.string
+      })
+```
+
+If the value being decoded has no `email` field, the resulting `Person` will have `Nothing` for `email` now rather than failing to decode. When encoding, if an optional value is `Nothing`, the field will be omitted from the resulting JSON object.
+
+This combinator only deals with entirely missing properties, so values like `null` will still need to be handled explicitly.
 
 ### Sum types and variants
 
