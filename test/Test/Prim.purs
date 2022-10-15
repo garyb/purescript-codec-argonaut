@@ -12,7 +12,6 @@ import Data.Codec.Argonaut.Common as CA
 import Data.Either (Either(..), either, note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as Int
-import Data.Maybe (Maybe(..))
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)

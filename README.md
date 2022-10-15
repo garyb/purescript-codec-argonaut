@@ -5,7 +5,7 @@
 
 Bi-directional codecs for [argonaut](https://github.com/purescript-contrib/purescript-argonaut-core).
 
-This library is build on [`purescript-codec`](https://github.com/garyb/purescript-codec) and offers a different approach to dealing with JSON encoding/decoding than [`purescript-argonaut-codecs`](https://github.com/purescript-contrib/purescript-argonaut-codecs). Instead of using type classes, codecs are constructed as values explicitly. As long as the basic codec values provided by this library are used, the codecs are guaranteed to roundtrip successfully.
+This library is built on [`purescript-codec`](https://github.com/garyb/purescript-codec) and offers a different approach to dealing with JSON encoding/decoding than [`purescript-argonaut-codecs`](https://github.com/purescript-contrib/purescript-argonaut-codecs). Instead of using type classes, codecs are constructed as values explicitly. As long as the basic codec values provided by this library are used, the codecs are guaranteed to roundtrip successfully.
 
 The errors reported from this library are a little better than those provided by `purescript-argonaut-codecs` too - they contain the full JSON structure to the point of failure, and the error can be inspected as a value before being printed as a string.
 
@@ -115,7 +115,11 @@ codec =
 Objects with optional properties can be defined using the [`CAR.optional`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Record#v:optional): 
 
 ```purescript
-type Person = 
+import Data.Codec.Argonaut as CA
+import Data.Codec.Argonaut.Record as CAR
+import Data.Maybe (Maybe)
+
+type Person =
   { name ∷ String
   , age ∷ Int
   , active ∷ Boolean
@@ -258,7 +262,7 @@ import Data.String.NonEmpty (NonEmptyString)
 import Data.String.NonEmpty as NES
 
 codec ∷ CA.JsonCodec NonEmptyString
-codec = CA.prismaticCodec NES.fromString NES.toString CA.string
+codec = CA.prismaticCodec "NonEmptyString" NES.fromString NES.toString CA.string
 ```
 
 See the documentation for [another example](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) of how [`CA.prismaticCodec`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) might be used. The main downside to [`CA.prismaticCodec`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:prismaticCodec) is the error reporting for the `Nothing` case might not be good as it otherwise could be, since [`UnexpectedValue`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#t:JsonDecodeError) is the only information we have at that point.
