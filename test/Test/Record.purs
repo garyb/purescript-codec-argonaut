@@ -8,14 +8,13 @@ import Data.Argonaut.Core (stringify)
 import Data.Argonaut.Core as Json
 import Data.Codec.Argonaut.Common as CA
 import Data.Codec.Argonaut.Record as CAR
-import Data.Maybe (Maybe(..), fromJust)
+import Data.Maybe (Maybe(..))
 import Data.Newtype (class Newtype, unwrap, wrap)
 import Data.Profunctor (dimap)
 import Data.String.Gen (genAsciiString)
 import Effect (Effect)
 import Effect.Console (log)
 import Foreign.Object as Object
-import Partial.Unsafe (unsafePartial)
 import Test.QuickCheck (assertEquals, quickCheck, quickCheckGen)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (genInt, propCodec)
@@ -86,14 +85,14 @@ main = do
   log "Check optional Nothing is missing from json"
   quickCheckGen do
     v ← genInner
-    let obj = unsafePartial $ fromJust $ Json.toObject $ CA.encode innerCodec (v { o = Nothing })
-    pure $ assertEquals [ "m", "n" ] (Object.keys obj)
+    let obj = Json.toObject $ CA.encode innerCodec (v { o = Nothing })
+    pure $ assertEquals (Just [ "m", "n" ]) (Object.keys <$> obj)
 
   log "Check optional Just is present in the json"
   quickCheckGen do
     b ← Gen.chooseBool
     v ← genInner
-    let obj = unsafePartial $ fromJust $ Json.toObject $ CA.encode innerCodec (v { o = Just b })
-    pure $ assertEquals [ "m", "n", "o" ] (Object.keys obj)
+    let obj = Json.toObject $ CA.encode innerCodec (v { o = Just b })
+    pure $ assertEquals (Just [ "m", "n", "o" ]) (Object.keys <$> obj)
 
   pure unit
