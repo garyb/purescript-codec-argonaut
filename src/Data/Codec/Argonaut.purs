@@ -24,8 +24,9 @@ module Data.Codec.Argonaut
   , recordProp
   , recordPropOptional
   , fix
-  , prismaticCodec
+  , named
   , coercible
+  , prismaticCodec
   , module Exports
   ) where
 
@@ -35,7 +36,7 @@ import Control.Monad.Reader (ReaderT(..), runReaderT)
 import Control.Monad.Writer (Writer, mapWriter, writer)
 import Data.Argonaut.Core as J
 import Data.Array as A
-import Data.Bifunctor (bimap)
+import Data.Bifunctor (bimap, lmap)
 import Data.Bifunctor as BF
 import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
 import Data.Codec (decode, encode, (<~<), (>~>), (~)) as Exports
@@ -373,6 +374,24 @@ fix f =
     (\x → decode (f (fix f)) x)
     (\x → encode (f (fix f)) x)
 
+-- | A codec for introducing names into error messages - useful when definiting a codec for a type
+-- | synonym for a record, for instance.
+named ∷ ∀ a. String → JsonCodec a -> JsonCodec a
+named name codec =
+  basicCodec
+    (lmap (Named name) <<< decode codec)
+    (encode codec)
+
+-- | A codec for types that can be safely coerced.
+-- |
+-- | Accepts the name of the target type as an argument to improve error messaging when the inner
+-- | codec fails.
+coercible ∷ ∀ a b. Coercible a b ⇒ String → JsonCodec a → JsonCodec b
+coercible name codec =
+  basicCodec
+    (bimap (Named name) coerce <<< decode codec)
+    (coerce (encode codec))
+
 -- | Adapts an existing codec with a pair of functions to allow a value to be
 -- | further refined. If the inner decoder fails an `UnexpectedValue` error will
 -- | be raised for JSON input.
@@ -417,13 +436,3 @@ prismaticCodec name f g orig =
   basicCodec
     (\json' → note (Named name (UnexpectedValue json')) <<< f =<< decode orig json')
     (encode orig <<< g)
-
--- | A codec for types that can be safely coerced.
--- |
--- | Accepts the name of the target type as an argument to improve error messaging when the inner
--- | codec fails.
-coercible ∷ ∀ a b. Coercible a b ⇒ String → JsonCodec a → JsonCodec b
-coercible name codec =
-  basicCodec
-    (bimap (Named name) coerce <<< decode codec)
-    (coerce (encode codec))
