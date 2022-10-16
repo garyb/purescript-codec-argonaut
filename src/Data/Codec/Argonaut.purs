@@ -397,7 +397,7 @@ coercible name codec =
 -- | be raised for JSON input.
 -- |
 -- | This function is named as such as the pair of functions it accepts
--- | correspond with the `preview` and `view` functions of a `Prism`-style lens.
+-- | correspond with the `preview` and `review` functions of a `Prism`-style lens.
 -- |
 -- | An example of this would be a codec for `Data.String.NonEmpty.NonEmptyString`:
 -- |

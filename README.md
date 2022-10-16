@@ -252,7 +252,7 @@ codec =
 
 ### "Prismatic" codecs
 
-If you have a type with a pair of functions like the `preview` and `view` that make up a prism (`preview :: a -> Maybe b`, `view :: b -> a`), you can use these to adapt an existing codec to further refine it.
+If you have a type with a pair of functions like the `preview` and `review` that make up a prism (`preview :: a -> Maybe b`, `review :: b -> a`), you can use these to adapt an existing codec to further refine it.
 
 For example, to adapt the [`CA.string`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut#v:string) codec to only work for `NonEmptyString`s:
 
