@@ -1,25 +1,30 @@
 module Data.Codec.Argonaut.Common
-  ( nonEmptyString
-  , nonEmptyArray
-  , maybe
-  , tuple
-  , either
-  , list
-  , nonEmptyList
-  , map
-  , set
-  , nonEmptySet
+  ( either
   , foreignObject
+  , list
+  , map
+  , maybe
   , module Data.Codec.Argonaut
+  , nonEmptyArray
+  , nonEmptyList
+  , nonEmptySet
+  , nonEmptyString
+  , set
+  , strMap
+  , tuple
   ) where
 
 import Prelude hiding (map, void)
 
+import Data.Argonaut.Core (Json)
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
+import Data.Bifunctor (lmap)
+import Data.Codec as Codec
 import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, codePoint, coercible, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, named, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, string, void, (<~<), (>~>), (~))
 import Data.Codec.Argonaut.Sum (taggedSum)
 import Data.Either (Either(..))
+import Data.FoldableWithIndex (forWithIndex_)
 import Data.Functor as F
 import Data.List as List
 import Data.List.NonEmpty as NEL
@@ -29,8 +34,10 @@ import Data.Profunctor (dimap)
 import Data.Set as Set
 import Data.Set.NonEmpty as NESet
 import Data.String.NonEmpty as NEString
+import Data.TraversableWithIndex (traverseWithIndex)
 import Data.Tuple (Tuple(..), fst, snd)
 import Foreign.Object as Object
+import Foreign.Object.ST as ObjectST
 
 -- | A codec for `NonEmptyString` values.
 -- |
@@ -110,6 +117,23 @@ nonEmptyList codec = prismaticCodec "NonEmptyList" NEL.fromFoldable Array.fromFo
 map ∷ ∀ a b. Ord a ⇒ JsonCodec a → JsonCodec b → JsonCodec (Map.Map a b)
 map codecA codecB = dimap Map.toUnfoldable (Map.fromFoldable) (named "Map" (array (tuple codecA codecB)))
 
+-- | A codec for `Map` values which have string keys.
+-- |
+-- | Encodes as an object in JSON.
+strMap ∷ ∀ a. JsonCodec a → JsonCodec (Map.Map String a)
+strMap codec = Codec.basicCodec decode encode
+  where
+  encode ∷ Map.Map String a → Json
+  encode msa = Codec.encode jobject $ Object.runST do
+    obj ← ObjectST.new
+    forWithIndex_ msa \k v → ObjectST.poke k (Codec.encode codec v) obj
+    pure obj
+
+  decode ∷ Json → Either JsonDecodeError (Map.Map String a)
+  decode json = do
+    r ← Map.fromFoldableWithIndex <$> Codec.decode jobject json
+    traverseWithIndex (\k v → lmap (AtKey k) (Codec.decode codec v)) r
+
 -- | A codec for `Set` values.
 -- |
 -- | Encodes as an array in JSON.
@@ -122,7 +146,7 @@ set codec = dimap Array.fromFoldable Set.fromFoldable (named "Set" (array codec)
 nonEmptySet ∷ ∀ a. Ord a ⇒ JsonCodec a → JsonCodec (NESet.NonEmptySet a)
 nonEmptySet codec = prismaticCodec "NonEmptySet" NESet.fromFoldable NESet.toUnfoldable (array codec)
 
--- | A codec for `StrMap` values.
+-- | A codec for `Object` values.
 -- |
 -- | Encodes as an array of two-element key/value arrays in JSON.
 foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (Object.Object a)

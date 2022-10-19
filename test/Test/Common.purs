@@ -31,6 +31,9 @@ main = do
   log "Checking StrMap codec"
   quickCheck propStrMapCodec
 
+  log "Checking Object codec"
+  quickCheck propObjectCodec
+
 propMaybeCodec ∷ Gen Result
 propMaybeCodec =
   propCodec
@@ -57,6 +60,12 @@ propMapCodec =
 
 propStrMapCodec ∷ Gen Result
 propStrMapCodec =
+  propCodec
+    (genMap genAsciiString genInt)
+    (JA.strMap JA.int)
+
+propObjectCodec ∷ Gen Result
+propObjectCodec =
   propCodec
     (genForeignObject genAsciiString genInt)
     (JA.foreignObject JA.int)
