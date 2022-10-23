@@ -57,8 +57,8 @@ module Data.Codec.Argonaut.Migration
 import Prelude
 
 import Data.Argonaut.Core as J
-import Data.Codec (basicCodec)
 import Data.Codec.Argonaut (JsonCodec)
+import Data.Codec.Argonaut as Codec
 import Data.Maybe (Maybe(..), fromMaybe, maybe)
 import Data.Tuple (Tuple(..), uncurry)
 import Foreign.Object as FO
@@ -85,7 +85,7 @@ addDefaultOrUpdateField field = alterField field <<< map Just
 -- | codec can be used to alter the JSON before parsing to ensure the new field
 -- | name is used instead
 renameField ∷ String → String → JsonCodec J.Json
-renameField oldName newName = basicCodec (pure <<< dec) identity
+renameField oldName newName = Codec.codec' (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< rename) j
@@ -114,7 +114,7 @@ renameField oldName newName = basicCodec (pure <<< dec) identity
 -- | If the tag field is missing from the input, it will also be missing in the
 -- | output.
 nestForTagged ∷ JsonCodec J.Json
-nestForTagged = basicCodec (pure <<< dec) identity
+nestForTagged = Codec.codec' (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< rewrite) j
@@ -136,7 +136,7 @@ nestForTagged = basicCodec (pure <<< dec) identity
     _ → J.fromObject obj
 
 alterField ∷ String → (Maybe J.Json → Maybe J.Json) → JsonCodec J.Json
-alterField field f = basicCodec (pure <<< dec) identity
+alterField field f = Codec.codec' (pure <<< dec) identity
   where
   dec ∷ J.Json → J.Json
   dec j = J.caseJsonObject j (J.fromObject <<< setDefault) j

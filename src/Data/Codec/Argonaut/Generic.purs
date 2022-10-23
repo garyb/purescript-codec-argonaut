@@ -24,7 +24,7 @@ import Type.Proxy (Proxy(..))
 -- |```
 nullarySum ∷ ∀ a r. Generic a r ⇒ NullarySumCodec r ⇒ String → CA.JsonCodec a
 nullarySum name =
-  C.basicCodec
+  C.codec'
     (map to <<< nullarySumDecode name)
     (nullarySumEncode <<< from)
 

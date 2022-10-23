@@ -2,14 +2,11 @@ module Data.Codec.Argonaut.Variant where
 
 import Prelude
 
-import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.Writer (Writer, writer)
 import Data.Argonaut.Core as J
-import Data.Codec (GCodec(..))
+import Data.Codec (Codec(..))
+import Data.Codec as Codec
 import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), decode, encode, jobject, json, prop, string)
 import Data.Either (Either(..))
-import Data.Newtype (un)
-import Data.Profunctor.Star (Star(..))
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Variant (Variant, case_, inj, on)
@@ -86,7 +83,7 @@ variantMatch = variantCodec (Proxy ∷ Proxy rl)
 -- |   _Nothing = Proxy ∷ Proxy "nothing"
 -- |```
 variant ∷ JsonCodec (Variant ())
-variant = GCodec (ReaderT (Left <<< UnexpectedValue)) (Star case_)
+variant = Codec (Left <<< UnexpectedValue) case_
 
 variantCase
   ∷ ∀ l a r r'
@@ -96,11 +93,11 @@ variantCase
   → Either a (JsonCodec a)
   → JsonCodec (Variant r)
   → JsonCodec (Variant r')
-variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
+variantCase proxy eacodec (Codec dec enc) = Codec.Codec dec' enc'
   where
 
-  dec' ∷ ReaderT J.Json (Either JsonDecodeError) (Variant r')
-  dec' = ReaderT \j → do
+  dec' ∷ J.Json → Either JsonDecodeError (Variant r')
+  dec' j = do
     obj ← decode jobject j
     tag ← decode (prop "tag" string) obj
     if tag == reflectSymbol proxy then
@@ -110,12 +107,12 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
           value ← decode (prop "value" json) obj
           inj proxy <$> decode codec value
     else
-      coerceR <$> runReaderT dec j
+      coerceR <$> dec j
 
-  enc' ∷ Star (Writer J.Json) (Variant r') (Variant r')
-  enc' = Star \v →
+  enc' ∷ Variant r' → Tuple J.Json (Variant r')
+  enc' v =
     on proxy
-      ( \v' → writer $ Tuple v $ encode jobject $
+      ( \v' → flip Tuple v $ encode jobject $
           FO.runST do
             obj ← FOST.new
             _ ← FOST.poke "tag" (encode string (reflectSymbol proxy)) obj
@@ -123,7 +120,7 @@ variantCase proxy eacodec (GCodec dec enc) = GCodec dec' enc'
               Left _ → pure obj
               Right codec → FOST.poke "value" (encode codec v') obj
       )
-      (\v' → un Star enc v' $> v)
+      (\v' → enc v' $> v)
       v
 
   coerceR ∷ Variant r → Variant r'

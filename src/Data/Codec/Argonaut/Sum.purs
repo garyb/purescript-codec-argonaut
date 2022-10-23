@@ -5,15 +5,12 @@ module Data.Codec.Argonaut.Sum
 
 import Prelude
 
-import Control.Monad.Reader (ReaderT(..))
-import Control.Monad.Writer (Writer, writer)
 import Data.Argonaut.Core as J
 import Data.Bifunctor (lmap)
-import Data.Codec (GCodec(..), decode, encode)
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), jobject, json, prop, string)
+import Data.Codec as Codec
+import Data.Codec.Argonaut as CA
 import Data.Either (Either(..))
 import Data.Maybe (Maybe(..), maybe)
-import Data.Profunctor.Star (Star(..))
 import Data.Tuple (Tuple(..))
 import Foreign.Object as FO
 import Foreign.Object.ST as FOST
@@ -24,18 +21,11 @@ enumSum
   ∷ ∀ a
   . (a → String)
   → (String → Maybe a)
-  → JsonCodec a
-enumSum printTag parseTag = GCodec dec enc
-  where
-  dec ∷ ReaderT J.Json (Either JsonDecodeError) a
-  dec = ReaderT \j → do
-    value ← decode string j
-    case parseTag value of
-      Just a → Right a
-      Nothing → Left (UnexpectedValue j)
-
-  enc ∷ Star (Writer J.Json) a a
-  enc = Star \a → writer $ Tuple a (encode string (printTag a))
+  → CA.JsonCodec a
+enumSum printTag parseTag =
+  Codec.codec
+    (\j → maybe (Left (CA.UnexpectedValue j)) Right <<< parseTag =<< Codec.decode CA.string j)
+    (Codec.encode CA.string <<< printTag)
 
 -- | A helper for defining JSON codecs for sum types. To ensure exhaustivity
 -- | there needs to be a mapping to and from a tag type for the type to be
@@ -54,29 +44,29 @@ taggedSum
   . String
   → (tag → String)
   → (String → Maybe tag)
-  → (tag → Either a (J.Json → Either JsonDecodeError a))
+  → (tag → Either a (J.Json → Either CA.JsonDecodeError a))
   → (a → Tuple tag (Maybe J.Json))
-  → JsonCodec a
-taggedSum name printTag parseTag f g = GCodec decodeCase encodeCase
+  → CA.JsonCodec a
+taggedSum name printTag parseTag f g = Codec.codec decodeCase encodeCase
   where
-  decodeCase ∷ ReaderT J.Json (Either JsonDecodeError) a
-  decodeCase = ReaderT \j → lmap (Named name) do
-    obj ← decode jobject j
-    tag ← decode (prop "tag" string) obj
+  decodeCase ∷ J.Json → Either CA.JsonDecodeError a
+  decodeCase j = lmap (CA.Named name) do
+    obj ← Codec.decode CA.jobject j
+    tag ← Codec.decode (CA.prop "tag" CA.string) obj
     case parseTag tag of
-      Nothing → Left (AtKey "tag" (UnexpectedValue (J.fromString tag)))
+      Nothing → Left (CA.AtKey "tag" (CA.UnexpectedValue (J.fromString tag)))
       Just t →
         case f t of
           Left a → pure a
           Right decoder → do
-            value ← decode (prop "value" json) obj
-            lmap (AtKey "value") (decoder value)
+            value ← Codec.decode (CA.prop "value" CA.json) obj
+            lmap (CA.AtKey "value") (decoder value)
 
-  encodeCase ∷ Star (Writer J.Json) a a
-  encodeCase = Star case _ of
-    a | Tuple tag value ← g a →
-      writer $ Tuple a $ encode jobject $
+  encodeCase ∷ a → J.Json
+  encodeCase a = case g a of
+    Tuple tag value →
+      Codec.encode CA.jobject $
         FO.runST do
           obj ← FOST.new
-          _ ← FOST.poke "tag" (encode string (printTag tag)) obj
+          _ ← FOST.poke "tag" (Codec.encode CA.string (printTag tag)) obj
           maybe (pure obj) (\v → FOST.poke "value" v obj) value
