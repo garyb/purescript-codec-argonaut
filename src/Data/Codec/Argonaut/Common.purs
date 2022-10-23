@@ -13,11 +13,11 @@ module Data.Codec.Argonaut.Common
   , module Data.Codec.Argonaut
   ) where
 
-import Prelude hiding (map, void)
+import Prelude hiding (map, void, identity)
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
-import Data.Codec.Argonaut (JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, codePoint, coercible, decode, encode, fix, index, indexedArray, int, jarray, jobject, json, named, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, string, void, (<~<), (>~>), (~))
+import Data.Codec.Argonaut (Codec(..), Codec', JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, codePoint, codec, codec', coercible, decode, encode, fix, hoist, identity, index, indexedArray, int, jarray, jobject, json, named, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, string, void, (<~<), (>~>), (~))
 import Data.Codec.Argonaut.Sum (taggedSum)
 import Data.Either (Either(..))
 import Data.Functor as F
