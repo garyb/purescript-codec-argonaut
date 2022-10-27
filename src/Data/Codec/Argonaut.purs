@@ -27,41 +27,38 @@ module Data.Codec.Argonaut
   , named
   , coercible
   , prismaticCodec
-  , module Exports
+  , module Codec
   ) where
 
 import Prelude
 
-import Control.Monad.Reader (ReaderT(..), runReaderT)
-import Control.Monad.Writer (Writer, mapWriter, writer)
 import Data.Argonaut.Core as J
 import Data.Array as A
 import Data.Bifunctor (bimap, lmap)
 import Data.Bifunctor as BF
-import Data.Codec (BasicCodec, Codec, GCodec(..), basicCodec, bihoistGCodec, decode, encode)
-import Data.Codec (decode, encode, (<~<), (>~>), (~)) as Exports
+import Data.Codec (Codec(..), Codec')
+import Data.Codec (Codec(..), Codec', codec, codec', decode, encode, hoist, identity, (<~<), (>~>), (~)) as Codec
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic)
 import Data.Int as I
 import Data.List ((:))
 import Data.List as L
-import Data.Maybe (Maybe(..), fromJust, maybe)
-import Data.Profunctor.Star (Star(..))
+import Data.Maybe (Maybe(..), maybe)
 import Data.String as S
 import Data.String.CodeUnits as SCU
 import Data.Symbol (class IsSymbol, reflectSymbol)
-import Data.Traversable (traverse)
+import Data.TraversableWithIndex (traverseWithIndex)
 import Data.Tuple (Tuple(..))
 import Foreign.Object as FO
-import Partial.Unsafe (unsafePartial)
 import Prim.Coerce (class Coercible)
 import Prim.Row as Row
+import Record.Unsafe as Record
 import Safe.Coerce (coerce)
 import Type.Proxy (Proxy)
 import Unsafe.Coerce (unsafeCoerce)
 
 -- | Codec type for `Json` values.
-type JsonCodec a = BasicCodec (Either JsonDecodeError) J.Json a
+type JsonCodec a = Codec' (Either JsonDecodeError) J.Json a
 
 -- | Error type for failures while decoding.
 data JsonDecodeError
@@ -100,7 +97,7 @@ printJsonDecodeError err =
 
 -- | The "identity codec" for `Json` values.
 json ∷ JsonCodec J.Json
-json = basicCodec pure identity
+json = Codec.codec' pure identity
 
 -- | A codec for `null` values in `Json`.
 null ∷ JsonCodec Unit
@@ -154,13 +151,10 @@ jobject = jsonPrimCodec "Object" J.toObject J.fromObject
 -- | codecIntArray = CA.array CA.int
 -- | ```
 array ∷ ∀ a. JsonCodec a → JsonCodec (Array a)
-array codec = GCodec dec enc
-  where
-  dec = ReaderT \j →
-    traverse (\(Tuple ix j') → BF.lmap (AtIndex ix) (decode codec j'))
-      <<< A.mapWithIndex Tuple
-      =<< decode jarray j
-  enc = Star \xs → writer $ Tuple xs (J.fromArray (map (encode codec) xs))
+array codec =
+  Codec.codec'
+    (\j → traverseWithIndex (\ix j' → BF.lmap (AtIndex ix) (Codec.decode codec j')) =<< Codec.decode jarray j)
+    (\a → J.fromArray (map (Codec.encode codec) a))
 
 -- | Codec type for specifically indexed `JArray` elements.
 type JIndexedCodec a =
@@ -189,20 +183,17 @@ type JIndexedCodec a =
 -- |     <*> _.age ~ CA.index 1 CA.int
 -- | ```
 indexedArray ∷ ∀ a. String → JIndexedCodec a → JsonCodec a
-indexedArray name =
-  bihoistGCodec
-    (\r → ReaderT (BF.lmap (Named name) <<< runReaderT r <=< decode jarray))
-    (mapWriter (BF.rmap (J.fromArray <<< A.fromFoldable)))
+indexedArray name codec =
+  Codec.codec'
+    (\j → lmap (Named name) (Codec.decode codec =<< Codec.decode jarray j))
+    (\a → Codec.encode jarray (A.fromFoldable (Codec.encode codec a)))
 
 -- | A codec for an item in an `indexedArray`.
 index ∷ ∀ a. Int → JsonCodec a → JIndexedCodec a
-index ix codec = GCodec dec enc
-  where
-  dec = ReaderT \xs →
-    BF.lmap (AtIndex ix) case A.index xs ix of
-      Just val → decode codec val
-      Nothing → Left MissingValue
-  enc = Star \val → writer $ Tuple val (pure (encode codec val))
+index ix codec =
+  Codec.codec
+    (\xs → BF.lmap (AtIndex ix) (maybe (Left MissingValue) (Codec.decode codec) (A.index xs ix)))
+    (pure <<< Codec.encode codec)
 
 -- | Codec type for `JObject` prop/value pairs.
 type JPropCodec a =
@@ -218,23 +209,17 @@ type JPropCodec a =
 -- | See also `Data.Codec.Argonaut.Record.object` for a more commonly useful
 -- | version of this function.
 object ∷ ∀ a. String → JPropCodec a → JsonCodec a
-object name =
-  bihoistGCodec
-    (\r → ReaderT (BF.lmap (Named name) <<< runReaderT r <=< decode jobject))
-    (mapWriter (BF.rmap (J.fromObject <<< FO.fromFoldable)))
+object name codec =
+  Codec.codec'
+    (\j → lmap (Named name) (Codec.decode codec =<< Codec.decode jobject j))
+    (\a → Codec.encode jobject (FO.fromFoldable (Codec.encode codec a)))
 
 -- | A codec for a property of an object.
 prop ∷ ∀ a. String → JsonCodec a → JPropCodec a
-prop key codec = GCodec dec enc
-  where
-  dec ∷ ReaderT (FO.Object J.Json) (Either JsonDecodeError) a
-  dec = ReaderT \obj →
-    BF.lmap (AtKey key) case FO.lookup key obj of
-      Just val → decode codec val
-      Nothing → Left MissingValue
-
-  enc ∷ Star (Writer (L.List (Tuple String J.Json))) a a
-  enc = Star \val → writer $ Tuple val (pure (Tuple key (encode codec val)))
+prop key codec =
+  Codec.codec
+    (\obj → BF.lmap (AtKey key) (maybe (Left MissingValue) (Codec.decode codec) (FO.lookup key obj)))
+    (pure <<< Tuple key <<< Codec.encode codec)
 
 -- | The starting value for a object-record codec. Used with `recordProp` it
 -- | provides a convenient method for defining codecs for record types that
@@ -258,7 +243,7 @@ prop key codec = GCodec dec enc
 -- | See also `Data.Codec.Argonaut.Record.object` for a more commonly useful
 -- | version of this function.
 record ∷ JPropCodec {}
-record = GCodec (pure {}) (Star \val → writer (Tuple val L.Nil))
+record = Codec (const (pure {})) pure
 
 -- | Used with `record` to define codecs for record types that encode into JSON
 -- | objects of the same shape. See the comment on `record` for an example.
@@ -271,30 +256,23 @@ recordProp
   → JPropCodec (Record r)
   → JPropCodec (Record r')
 recordProp p codecA codecR =
-  let key = reflectSymbol p in GCodec (dec' key) (enc' key)
+  let key = reflectSymbol p in Codec.codec (dec' key) (enc' key)
   where
-  dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
-  dec' key = ReaderT \obj → do
-    r ← decode codecR obj
+  dec' ∷ String → FO.Object J.Json → Either JsonDecodeError (Record r')
+  dec' key obj = do
+    r ← Codec.decode codecR obj
     a ← BF.lmap (AtKey key) case FO.lookup key obj of
-      Just val → decode codecA val
+      Just val → Codec.decode codecA val
       Nothing → Left MissingValue
-    pure $ unsafeSet key a r
+    pure $ Record.unsafeSet key a r
 
-  enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
-  enc' key = Star \val →
-    writer $ Tuple val
-      $ Tuple key (encode codecA (unsafeGet key val))
-          : encode codecR (unsafeForget val)
+  enc' ∷ String → Record r' → L.List (Tuple String J.Json)
+  enc' key val =
+    Tuple key (Codec.encode codecA (Record.unsafeGet key val))
+      : Codec.encode codecR (unsafeForget val)
 
   unsafeForget ∷ Record r' → Record r
   unsafeForget = unsafeCoerce
-
-  unsafeSet ∷ String → a → Record r → Record r'
-  unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
-
-  unsafeGet ∷ String → Record r' → a
-  unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
 
 -- | Used with `record` to define an optional field.
 -- |
@@ -311,41 +289,31 @@ recordPropOptional
   → JsonCodec a
   → JPropCodec (Record r)
   → JPropCodec (Record r')
-recordPropOptional p codecA codecR =
-  let key = reflectSymbol p in GCodec (dec' key) (enc' key)
+recordPropOptional p codecA codecR = Codec.codec dec' enc'
   where
-  dec' ∷ String → ReaderT (FO.Object J.Json) (Either JsonDecodeError) (Record r')
-  dec' key = ReaderT \obj → do
-    r ← decode codecR obj
-    a ← BF.lmap (AtKey key) case FO.lookup key obj of
-      Just val → Just <$> decode codecA val
-      _ → Right Nothing
-    pure $ unsafeSet key a r
+  key ∷ String
+  key = reflectSymbol p
 
-  enc' ∷ String → Star (Writer (L.List (Tuple String J.Json))) (Record r') (Record r')
-  enc' key = Star \val → do
-    let w = encode codecR (unsafeForget val)
-    writer $ Tuple val case unsafeGet key val of
-      Just a → Tuple key (encode codecA a) : w
+  dec' ∷ FO.Object J.Json → Either JsonDecodeError (Record r')
+  dec' obj = do
+    r ← Codec.decode codecR obj
+    a ← BF.lmap (AtKey key) case FO.lookup key obj of
+      Just val → Just <$> Codec.decode codecA val
+      _ → Right Nothing
+    pure $ Record.unsafeSet key a r
+
+  enc' ∷ Record r' → L.List (Tuple String J.Json)
+  enc' val = do
+    let w = Codec.encode codecR (unsafeForget val)
+    case Record.unsafeGet key val of
+      Just a → Tuple key (Codec.encode codecA a) : w
       Nothing → w
 
   unsafeForget ∷ Record r' → Record r
   unsafeForget = unsafeCoerce
 
-  unsafeSet ∷ String → Maybe a → Record r → Record r'
-  unsafeSet key a = unsafeCoerce <<< FO.insert key a <<< unsafeCoerce
-
-  unsafeGet ∷ String → Record r' → Maybe a
-  unsafeGet s = unsafePartial fromJust <<< FO.lookup s <<< unsafeCoerce
-
-jsonPrimCodec
-  ∷ ∀ a
-  . String
-  → (J.Json → Maybe a)
-  → (a → J.Json)
-  → JsonCodec a
-jsonPrimCodec ty f =
-  basicCodec (maybe (Left (TypeMismatch ty)) pure <<< f)
+jsonPrimCodec ∷ ∀ a. String → (J.Json → Maybe a) → (a → J.Json) → JsonCodec a
+jsonPrimCodec ty f = Codec.codec' (maybe (Left (TypeMismatch ty)) pure <<< f)
 
 -- | Helper function for defining recursive codecs in situations where the codec
 -- | definition causes a _"The value of <codec> is undefined here"_ error.
@@ -370,17 +338,17 @@ jsonPrimCodec ty f =
 -- | ```
 fix ∷ ∀ a. (JsonCodec a → JsonCodec a) → JsonCodec a
 fix f =
-  basicCodec
-    (\x → decode (f (fix f)) x)
-    (\x → encode (f (fix f)) x)
+  Codec.codec'
+    (\x → Codec.decode (f (fix f)) x)
+    (\x → Codec.encode (f (fix f)) x)
 
 -- | A codec for introducing names into error messages - useful when definiting a codec for a type
 -- | synonym for a record, for instance.
-named ∷ ∀ a. String → JsonCodec a -> JsonCodec a
+named ∷ ∀ a. String → JsonCodec a → JsonCodec a
 named name codec =
-  basicCodec
-    (lmap (Named name) <<< decode codec)
-    (encode codec)
+  Codec.codec'
+    (lmap (Named name) <<< Codec.decode codec)
+    (Codec.encode codec)
 
 -- | A codec for types that can be safely coerced.
 -- |
@@ -388,9 +356,9 @@ named name codec =
 -- | codec fails.
 coercible ∷ ∀ a b. Coercible a b ⇒ String → JsonCodec a → JsonCodec b
 coercible name codec =
-  basicCodec
-    (bimap (Named name) coerce <<< decode codec)
-    (coerce (encode codec))
+  Codec.codec'
+    (bimap (Named name) coerce <<< Codec.decode codec)
+    (coerce (Codec.encode codec))
 
 -- | Adapts an existing codec with a pair of functions to allow a value to be
 -- | further refined. If the inner decoder fails an `UnexpectedValue` error will
@@ -432,7 +400,7 @@ coercible name codec =
 -- | Although for this latter case there are some other options too, in the form
 -- | of `Data.Codec.Argonaut.Generic.nullarySum` and `Data.Codec.Argonaut.Sum.enumSum`.
 prismaticCodec ∷ ∀ a b. String → (a → Maybe b) → (b → a) → JsonCodec a → JsonCodec b
-prismaticCodec name f g orig =
-  basicCodec
-    (\json' → note (Named name (UnexpectedValue json')) <<< f =<< decode orig json')
-    (encode orig <<< g)
+prismaticCodec name f g codec =
+  Codec.codec'
+    (\j → note (Named name (UnexpectedValue j)) <<< f =<< Codec.decode codec j)
+    (Codec.encode codec <<< g)
