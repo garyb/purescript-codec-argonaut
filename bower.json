@@ -20,7 +20,8 @@
     "purescript-codec": "^6.0.0",
     "purescript-variant": "^8.0.0",
     "purescript-ordered-collections": "^3.0.0",
-    "purescript-type-equality": "^4.0.1"
+    "purescript-type-equality": "^4.0.1",
+    "purescript-foreign-object": "^4.1.0"
   },
   "devDependencies": {
     "purescript-argonaut-codecs": "^9.1.0",

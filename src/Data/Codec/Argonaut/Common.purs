@@ -1,19 +1,9 @@
 module Data.Codec.Argonaut.Common
-  ( nonEmptyString
-  , nonEmptyArray
-  , maybe
-  , tuple
-  , either
-  , list
-  , nonEmptyList
-  , map
-  , set
-  , nonEmptySet
-  , foreignObject
+  ( module Data.Codec.Argonaut.Common
   , module Data.Codec.Argonaut
   ) where
 
-import Prelude hiding (map, void, identity)
+import Prelude hiding (identity, map, void)
 
 import Data.Array as Array
 import Data.Array.NonEmpty as NEA
@@ -29,6 +19,7 @@ import Data.Profunctor (dimap)
 import Data.Set as Set
 import Data.Set.NonEmpty as NESet
 import Data.String.NonEmpty as NEString
+import Data.Traversable (traverse)
 import Data.Tuple (Tuple(..), fst, snd)
 import Foreign.Object as Object
 
@@ -110,6 +101,15 @@ nonEmptyList codec = prismaticCodec "NonEmptyList" NEL.fromFoldable Array.fromFo
 map ∷ ∀ a b. Ord a ⇒ JsonCodec a → JsonCodec b → JsonCodec (Map.Map a b)
 map codecA codecB = dimap Map.toUnfoldable (Map.fromFoldable) (named "Map" (array (tuple codecA codecB)))
 
+-- | A codec for `Map` values which have string keys.
+-- |
+-- | Encodes as an object in JSON.
+strMap ∷ ∀ a. JsonCodec a → JsonCodec (Map.Map String a)
+strMap codec =
+  codec'
+    (F.map Map.fromFoldableWithIndex <<< traverse (decode codec) <=< decode jobject)
+    (encode jobject <<< Object.fromFoldableWithIndex <<< F.map (encode codec))
+
 -- | A codec for `Set` values.
 -- |
 -- | Encodes as an array in JSON.
@@ -122,7 +122,7 @@ set codec = dimap Array.fromFoldable Set.fromFoldable (named "Set" (array codec)
 nonEmptySet ∷ ∀ a. Ord a ⇒ JsonCodec a → JsonCodec (NESet.NonEmptySet a)
 nonEmptySet codec = prismaticCodec "NonEmptySet" NESet.fromFoldable NESet.toUnfoldable (array codec)
 
--- | A codec for `StrMap` values.
+-- | A codec for `Object` values.
 -- |
 -- | Encodes as an array of two-element key/value arrays in JSON.
 foreignObject ∷ ∀ a. JsonCodec a → JsonCodec (Object.Object a)

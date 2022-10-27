@@ -9,7 +9,7 @@ import Prelude hiding (identity, map, void)
 import Data.Argonaut.Core as J
 import Data.Bifunctor as BF
 import Data.Codec as Codec
-import Data.Codec.Argonaut.Common (Codec(..), Codec', JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, codePoint, codec, codec', coercible, decode, either, encode, fix, hoist, identity, index, indexedArray, int, jarray, jobject, json, list, map, named, nonEmptyArray, nonEmptyList, nonEmptySet, nonEmptyString, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, set, string, tuple, void, (<~<), (>~>), (~))
+import Data.Codec.Argonaut.Common (Codec(..), Codec', JIndexedCodec, JPropCodec, JsonCodec, JsonDecodeError(..), array, boolean, char, codePoint, codec, codec', coercible, decode, either, encode, fix, hoist, identity, index, indexedArray, int, jarray, jobject, json, list, map, named, nonEmptyArray, nonEmptyList, nonEmptySet, nonEmptyString, null, number, object, printJsonDecodeError, prismaticCodec, prop, record, recordProp, recordPropOptional, set, strMap, string, tuple, void, (<~<), (>~>), (~))
 import Data.Either (Either)
 import Data.Functor as Functor
 import Data.Maybe (Maybe(..))
