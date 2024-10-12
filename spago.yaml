@@ -1,0 +1,22 @@
+package:
+  name: codec-argonaut
+  dependencies:
+    - console
+    - effect
+    - prelude
+    - argonaut-core
+    - codec
+    - variant
+    - ordered-collections
+    - type-equality
+    - foreign-object
+    - undefined
+  test:
+    main: Test.Main
+    dependencies:
+    - argonaut-codecs
+    - quickcheck
+workspace:
+  package_set:
+    registry: 47.10.0
+  extra_packages: {}
