@@ -60,41 +60,87 @@ main ∷ Effect Unit
 main = do
   log "Check sum"
 
-  -- Encode/Decode constructor without arguments
-  check (codecSample defaultEncoding) Foo
-    $ Str.joinWith "\n"
-        [ "{"
-        , "  \"tag\": \"Foo\","
-        , "  \"values\": []"
-        , "}"
-        ]
-
-  -- Encode/Decode constructor with single argument
-  check (codecSample defaultEncoding) (Bar 42)
-    $ Str.joinWith "\n"
-        [ "{"
-        , "  \"tag\": \"Bar\","
-        , "  \"values\": ["
-        , "    42"
-        , "  ]"
-        , "}"
-        ]
-
-  -- Encode/Decode constructor with multiple arguments
-  check (codecSample defaultEncoding) (Baz true "hello" 42)
-    $ Str.joinWith "\n"
-        [ "{"
-        , "  \"tag\": \"Baz\","
-        , "  \"values\": ["
-        , "    true,"
-        , "    \"hello\","
-        , "    42"
-        , "  ]"
-        , "}"
-        ]
-
+  -- Default encoding
   do
-    -- ...
+
+    -- Encode/Decode constructor without arguments
+    check (codecSample defaultEncoding) Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Foo\","
+          , "  \"values\": []"
+          , "}"
+          ]
+
+    -- Encode/Decode constructor with single argument
+    check (codecSample defaultEncoding) (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Bar\","
+          , "  \"values\": ["
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+    -- Encode/Decode constructor with multiple arguments
+    check (codecSample defaultEncoding) (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Baz\","
+          , "  \"values\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+  -- Custom tag and values keys
+  do
+    let
+      opts = defaultEncoding
+        { tagKey = "customTag"
+        , valuesKey = "customValues"
+        }
+    check
+      (codecSample opts)
+      Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Foo\","
+          , "  \"customValues\": []"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Bar\","
+          , "  \"customValues\": ["
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Baz\","
+          , "  \"customValues\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+  -- Option: Omit empty arguments 
+  do
     let
       opts = defaultEncoding
         { omitEmptyArguments = true
@@ -134,8 +180,8 @@ main = do
           , "}"
           ]
 
+  -- Option: Unwrap single arguments
   do
-    -- ...
     let
       opts = defaultEncoding
         { unwrapSingleArguments = true
@@ -167,50 +213,6 @@ main = do
           [ "{"
           , "  \"tag\": \"Baz\","
           , "  \"values\": ["
-          , "    true,"
-          , "    \"hello\","
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
-
-
-  do
-    -- ...
-    let
-      opts = defaultEncoding
-        { tagKey = "customTag"
-        , valuesKey = "customValues"
-        }
-    check
-      (codecSample opts)
-      Foo
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Foo\","
-          , "  \"customValues\": []"
-          , "}"
-          ]
-
-    check
-      (codecSample opts)
-      (Bar 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Bar\","
-          , "  \"customValues\": ["
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
-
-    check
-      (codecSample opts)
-      (Baz true "hello" 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Baz\","
-          , "  \"customValues\": ["
           , "    true,"
           , "    \"hello\","
           , "    42"

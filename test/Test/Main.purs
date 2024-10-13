@@ -10,6 +10,7 @@ import Test.Generic as Generic
 import Test.Migration as Migration
 import Test.Prim as TestPrim
 import Test.Record as Record
+import Test.Sum as Sum
 import Test.Variant as Variant
 
 main ∷ Effect Unit
@@ -31,6 +32,10 @@ main = do
   Variant.main
   log ""
   log "Checking Record codecs"
+  log "------------------------------------------------------------"
+  Sum.main
+  log ""
+  log "Checking Sume codecs"
   log "------------------------------------------------------------"
   Record.main
   log ""
