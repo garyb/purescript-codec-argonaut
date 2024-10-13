@@ -3,25 +3,21 @@ module Test.Sum where
 import Prelude
 
 import Control.Monad.Error.Class (liftEither)
-import Data.Argonaut.Core (Json, stringifyWithIndent)
+import Data.Argonaut.Core (stringifyWithIndent)
 import Data.Argonaut.Decode (parseJson)
 import Data.Bifunctor (lmap)
-import Data.Codec (Codec, codec, decode, encode, (>~>))
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), codec, json, prismaticCodec)
+import Data.Codec (decode, encode)
+import Data.Codec.Argonaut (JsonCodec)
 import Data.Codec.Argonaut as C
-import Data.Codec.Argonaut.Record as CAR
-import Data.Codec.Argonaut.Sum (sum)
-import Data.Either (Either(..))
+import Data.Codec.Argonaut.Sum (Encoding, defaultEncoding, sumWith)
 import Data.Generic.Rep (class Generic)
-import Data.Maybe (Maybe(..))
-import Data.Profunctor (dimap)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
 import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Console (log)
 import Effect.Exception (error, throw)
-import Test.QuickCheck (assertEquals, quickCheck)
+import Test.QuickCheck (quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
 import Test.QuickCheck.Gen (Gen)
 import Test.Util (propCodec)
@@ -40,8 +36,8 @@ genMySum = genericArbitrary
 instance Show Sample where
   show = genericShow
 
-codecSample ∷ JsonCodec Sample
-codecSample = sum "Sample"
+codecSample ∷ Encoding → JsonCodec Sample
+codecSample encoding = sumWith encoding "Sample"
   { "Foo": unit
   , "Bar": C.int
   , "Baz": C.boolean /\ C.string /\ C.int
@@ -64,33 +60,163 @@ main ∷ Effect Unit
 main = do
   log "Check sum"
 
-  check codecSample Foo $ Str.joinWith "\n"
-    [ "{"
-    , "  \"tag\": \"Foo\","
-    , "  \"values\": []"
-    , "}"
-    ]
-
-  check codecSample (Bar 42) $ Str.joinWith "\n"
-    [ "{"
-    , "  \"tag\": \"Bar\","
-    , "  \"values\": ["
-    , "    42"
-    , "  ]"
-    , "}"
-    ]
-
-  check codecSample (Baz true "hello" 42)
+  -- Encode/Decode constructor without arguments
+  check (codecSample defaultEncoding) Foo
     $ Str.joinWith "\n"
-    [ "{"
-    , "  \"tag\": \"Baz\","
-    , "  \"values\": ["
-    , "    true,"
-    , "    \"hello\","
-    , "    42"
-    , "  ]"
-    , "}"
-    ]
+        [ "{"
+        , "  \"tag\": \"Foo\","
+        , "  \"values\": []"
+        , "}"
+        ]
 
-  quickCheck (propCodec genMySum codecSample)
+  -- Encode/Decode constructor with single argument
+  check (codecSample defaultEncoding) (Bar 42)
+    $ Str.joinWith "\n"
+        [ "{"
+        , "  \"tag\": \"Bar\","
+        , "  \"values\": ["
+        , "    42"
+        , "  ]"
+        , "}"
+        ]
+
+  -- Encode/Decode constructor with multiple arguments
+  check (codecSample defaultEncoding) (Baz true "hello" 42)
+    $ Str.joinWith "\n"
+        [ "{"
+        , "  \"tag\": \"Baz\","
+        , "  \"values\": ["
+        , "    true,"
+        , "    \"hello\","
+        , "    42"
+        , "  ]"
+        , "}"
+        ]
+
+  do
+    -- ...
+    let
+      opts = defaultEncoding
+        { omitEmptyArguments = true
+        }
+    check
+      (codecSample opts)
+      Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Foo\""
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Bar\","
+          , "  \"values\": ["
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Baz\","
+          , "  \"values\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+  do
+    -- ...
+    let
+      opts = defaultEncoding
+        { unwrapSingleArguments = true
+        }
+    check
+      (codecSample opts)
+      Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Foo\","
+          , "  \"values\": []"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Bar\","
+          , "  \"values\": 42"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Baz\","
+          , "  \"values\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+
+  do
+    -- ...
+    let
+      opts = defaultEncoding
+        { tagKey = "customTag"
+        , valuesKey = "customValues"
+        }
+    check
+      (codecSample opts)
+      Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Foo\","
+          , "  \"customValues\": []"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Bar\","
+          , "  \"customValues\": ["
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"customTag\": \"Baz\","
+          , "  \"customValues\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+  quickCheck (propCodec genMySum (codecSample defaultEncoding))
 

@@ -1,14 +1,17 @@
 module Data.Codec.Argonaut.Sum
-  ( class Count
+  ( Encoding
+  , class GProduct
   , class GSum
+  , defaultEncoding
   , enumSum
   , gSumDecode
   , gSumEncode
   , sum
   , sumWith
   , taggedSum
-  )
-  where
+  , gProductDecode
+  , gProductEncode
+  ) where
 
 import Prelude
 
@@ -16,21 +19,17 @@ import Control.Alt ((<|>))
 import Control.Monad.Error.Class (throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Core (Json, fromString) as J
-import Data.Argonaut.Core (Json, fromString) as J
-import Data.Argonaut.Encode.Encoders (encodeString)
+import Data.Array (catMaybes)
 import Data.Array as Array
 import Data.Bifunctor (lmap)
-import Data.Codec (Codec', codec', decode, encode)
-import Data.Codec as C
+import Data.Codec (codec', encode)
 import Data.Codec as Codec
-import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..))
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..), jobject)
 import Data.Codec.Argonaut as CA
-import Data.Either (Either(..))
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), NoArguments(..), Product(..), Sum(..), from, to)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Maybe (Maybe(..), maybe)
-import Data.Reflectable (class Reflectable, reflectType)
+import Data.Profunctor (dimap)
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\), (/\))
@@ -38,7 +37,6 @@ import Foreign.Object (Object)
 import Foreign.Object as FO
 import Foreign.Object as Obj
 import Foreign.Object.ST as FOST
-import Prim.Int (class Add)
 import Prim.Row as Row
 import Record as Record
 import Type.Proxy (Proxy(..))
@@ -116,162 +114,233 @@ defaultEncoding =
   , omitEmptyArguments: false
   }
 
-sum ∷ ∀ r rep a. Generic a rep ⇒ GSum (Record r) (Object Json) rep ⇒ String → Record r → JsonCodec a
+--------------------------------------------------------------------------------
+
+sum ∷ ∀ r rep a. Generic a rep ⇒ GSum r rep ⇒ String → Record r → JsonCodec a
 sum = sumWith defaultEncoding
 
-sumWith ∷ ∀ r rep a. GSum (Record r) (Object Json) rep ⇒ Generic a rep ⇒ Encoding → String → Record r → JsonCodec a
-sumWith encoding name r = codec' decode encode
+sumWith ∷ ∀ r rep a. GSum r rep ⇒ Generic a rep ⇒ Encoding → String → Record r → JsonCodec a
+sumWith encoding name r =
+  dimap from to $ codec' decode encode
   where
-  encode ∷ a → Json
-  encode val = C.encode CA.jobject $ gSumEncode encoding r $ from val
+  decode = gSumDecode encoding r >>> (lmap $ Named name)
+  encode = gSumEncode encoding r
 
-  decode ∷ Json → Either JsonDecodeError a
-  decode json = do
-    obj ← C.decode CA.jobject json
-    rep ← gSumDecode encoding r obj
-    pure $ to rep
+--------------------------------------------------------------------------------
 
-codecTagged ∷ Encoding → Int → Codec'' (Object Json) Tagged
-codecTagged encoding n = codec' decode encode
-  where
-  encode ∷ Tagged → Object Json
-  encode { tag, fields } =
-    Obj.fromFoldable
-      case Array.uncons fields of
-        Nothing | encoding.omitEmptyArguments →
-          [ (encoding.tagKey /\ CA.encode CA.string tag) ]
-        Just { head, tail: [] } | encoding.unwrapSingleArguments →
-          [ (encoding.tagKey /\ CA.encode CA.string tag)
-          , (encoding.valuesKey /\ head)
-          ]
-        _ →
-          [ (encoding.tagKey /\ encodeString tag)
-          , (encoding.valuesKey /\ CA.encode CA.jarray fields)
-          ]
-
-  decode ∷ Object Json → Either JsonDecodeError Tagged
-  decode obj = do
-    tag ← note (TypeMismatch "String") $ Obj.lookup encoding.tagKey obj
-    tagStr ∷ String ← CA.decode CA.string tag
-
-    fields ← case n of
-      0 | encoding.omitEmptyArguments → pure []
-      1 | encoding.unwrapSingleArguments → do
-        val ← note (TypeMismatch "") $ Obj.lookup encoding.valuesKey obj
-        pure [ val ]
-      _ → do
-        val ← note (TypeMismatch "") $ Obj.lookup encoding.valuesKey obj
-        CA.decode CA.jarray val
-
-    pure { tag: tagStr, fields }
-
-type Tagged =
-  { tag ∷ String
-  , fields ∷ Array Json
-  }
-
-class GSum ∷ Type → Type → Type → Constraint
+class GSum ∷ Row Type → Type → Constraint
 class
-  GSum codecs lo hi
-  | codecs hi → lo
+  GSum r rep
   where
-  gSumEncode ∷ Encoding → codecs → hi → lo
-  gSumDecode ∷ Encoding → codecs → lo → Either JsonDecodeError hi
+  gSumEncode ∷ Encoding → Record r → rep → Json
+  gSumDecode ∷ Encoding → Record r → Json → Either JsonDecodeError rep
+
+instance gSumConstructorNoArgs ∷
+  ( Row.Cons name Unit () r
+  , IsSymbol name
+  ) ⇒
+  GSum r (Constructor name NoArguments) where
+  gSumEncode ∷ Encoding → Record r → Constructor name NoArguments → Json
+  gSumEncode encoding _ _ =
+    encodeTagged encoding (reflectSymbol (Proxy ∷ Proxy name))
+      ( if encoding.omitEmptyArguments then
+          Nothing
+        else
+          Just $ CA.encode CA.jarray []
+      )
+
+  gSumDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name NoArguments)
+  gSumDecode encoding _ json = do
+    obj ← CA.decode jobject json ∷ _ (Object Json)
+
+    checkTag encoding obj (reflectSymbol (Proxy ∷ Proxy name))
+
+    parseNoFields encoding obj
+
+    pure $ Constructor NoArguments
+
+else instance gSumConstructorSingleArg ∷
+  ( Row.Cons name (JsonCodec a) () r
+  , IsSymbol name
+  ) ⇒
+  GSum r (Constructor name (Argument a)) where
+  gSumEncode ∷ Encoding → Record r → Constructor name (Argument a) → Json
+  gSumEncode encoding r (Constructor (Argument x)) =
+    let
+      codec = Record.get (Proxy ∷ Proxy name) r ∷ JsonCodec a
+    in
+      encodeTagged encoding (reflectSymbol (Proxy ∷ Proxy name))
+        ( Just $
+            if encoding.unwrapSingleArguments then
+              CA.encode codec x
+            else
+              CA.encode CA.jarray [ CA.encode codec x ]
+        )
+
+  gSumDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name (Argument a))
+  gSumDecode encoding r json = do
+    obj ← CA.decode jobject json ∷ _ (Object Json)
+    checkTag encoding obj (reflectSymbol (Proxy ∷ Proxy name))
+
+    field ← parseSingleField encoding obj ∷ _ Json
+
+    let codec = Record.get (Proxy ∷ Proxy name) r ∷ JsonCodec a
+
+    result ← CA.decode codec field ∷ _ a
+
+    pure $ Constructor (Argument result)
+
+else instance gSumConstructorManyArgs ∷
+  ( Row.Cons name codecs () r
+  , GProduct codecs args
+  , IsSymbol name
+  ) ⇒
+  GSum r (Constructor name args) where
+  gSumEncode ∷ Encoding → Record r → Constructor name args → Json
+  gSumEncode encoding r (Constructor rep) =
+    let
+      codecs = Record.get (Proxy ∷ Proxy name) r ∷ codecs
+
+      jsons = gProductEncode encoding codecs rep ∷ Array Json
+    in
+      encodeTagged encoding (reflectSymbol (Proxy ∷ Proxy name))
+        (Just $ CA.encode CA.jarray jsons)
+
+  gSumDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name args)
+  gSumDecode encoding r json = do
+    obj ← CA.decode jobject json ∷ _ (Object Json)
+    checkTag encoding obj (reflectSymbol (Proxy ∷ Proxy name))
+
+    jsons ← parseManyFields encoding obj ∷ _ (Array Json)
+
+    let codecs = Record.get (Proxy ∷ Proxy name) r ∷ codecs
+
+    result ← gProductDecode encoding codecs jsons ∷ _ args
+
+    pure $ Constructor result
 
 instance gSumSum ∷
-  ( GSum (Record r) (Object Json) lhs
-  , GSum (Record r) (Object Json) rhs
-  ) ⇒
-  GSum (Record r) (Object Json) (Sum lhs rhs) where
-  gSumEncode ∷ Encoding → Record r → Sum lhs rhs → Object Json
-  gSumEncode encoding r = case _ of
-    Inl lhs → gSumEncode encoding r lhs
-    Inr rhs → gSumEncode encoding r rhs
-
-  gSumDecode ∷ Encoding → Record r → Object Json → Either JsonDecodeError (Sum lhs rhs)
-  gSumDecode encoding r tagged = (Inl <$> gSumDecode encoding r tagged) <|> (Inr <$> gSumDecode encoding r tagged)
-
-instance gSumConstructor ∷
-  ( Row.Cons name codecs r' r
-  , GSum codecs (Array Json) args
+  ( GSum r1 (Constructor name lhs)
+  , GSum r2 rhs
+  , Row.Cons name codecs1 () r1
+  , Row.Cons name codecs1 r2 r
+  , Row.Union r1 r2 r
+  , Row.Lacks name r2
   , IsSymbol name
-  , Count codecs countFields
-  , Reflectable countFields Int
   ) ⇒
-  GSum (Record r) (Object Json) (Constructor name args) where
-  gSumEncode ∷ Encoding → Record r → Constructor name args → Object Json
-  gSumEncode encoding r (Constructor rep) = C.encode (codecTagged encoding countFields)
-    { tag: reflectSymbol (Proxy ∷ Proxy name)
-    , fields: gSumEncode encoding val rep
-    }
+  GSum r (Sum (Constructor name lhs) rhs) where
+  gSumEncode ∷ Encoding → Record r → Sum (Constructor name lhs) rhs → Json
+  gSumEncode encoding r =
+    let
+      codecs1 = Record.get (Proxy ∷ Proxy name) r ∷ codecs1
+      r1 = Record.insert (Proxy ∷ Proxy name) codecs1 {} ∷ Record r1
+      r2 = Record.delete (Proxy ∷ Proxy name) r ∷ Record r2
+    in
+      case _ of
+        Inl lhs → gSumEncode encoding r1 lhs
+        Inr rhs → gSumEncode encoding r2 rhs
 
-    where
-    countFields ∷ Int
-    countFields = reflectType (Proxy ∷ Proxy countFields)
+  gSumDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Sum (Constructor name lhs) rhs)
+  gSumDecode encoding r tagged = do
+    let
+      codecs1 = Record.get (Proxy ∷ Proxy name) r ∷ codecs1
+      r1 = Record.insert (Proxy ∷ Proxy name) codecs1 {} ∷ Record r1
+      r2 = Record.delete (Proxy ∷ Proxy name) r ∷ Record r2
 
-    val ∷ codecs
-    val = Record.get (Proxy ∷ Proxy name) r
+      lhs = gSumDecode encoding r1 tagged ∷ _ (Constructor name lhs)
+      rhs = gSumDecode encoding r2 tagged ∷ _ rhs
+    (Inl <$> lhs) <|> (Inr <$> rhs)
 
-  gSumDecode ∷ Encoding → Record r → Object Json → Either JsonDecodeError (Constructor name args)
-  gSumDecode encoding r obj = do
-    { tag, fields } ← C.decode (codecTagged encoding countFields) obj
+--------------------------------------------------------------------------------
 
-    unless (tag == reflectSymbol (Proxy ∷ Proxy name))
-      $ throwError
-      $ TypeMismatch "Wrong tag"
+class GProduct ∷ Type → Type → Constraint
+class GProduct codecs rep where
+  gProductEncode ∷ Encoding → codecs → rep → Array Json
+  gProductDecode ∷ Encoding → codecs → Array Json → Either JsonDecodeError rep
 
-    rep ← gSumDecode encoding val fields
-    pure $ Constructor rep
+instance gProductArgument ∷ GProduct (JsonCodec a) (Argument a) where
+  gProductEncode ∷ Encoding → JsonCodec a → Argument a → Array Json
+  gProductEncode _ codec (Argument val) = [ CA.encode codec val ]
 
-    where
-    countFields ∷ Int
-    countFields = reflectType (Proxy ∷ Proxy countFields)
+  gProductDecode ∷ Encoding → JsonCodec a → Array Json → Either JsonDecodeError (Argument a)
+  gProductDecode _ codec jsons = do
+    json ← case jsons of
+      [ head ] → pure head
+      _ → Left $ TypeMismatch "Expecting exactly one element"
 
-    val ∷ codecs
-    val = Record.get (Proxy ∷ Proxy name) r
+    res ← CA.decode codec json ∷ _ a
 
-instance gSumProduct ∷
-  ( GSum codec (Array Json) rep
-  , GSum codecs (Array Json) reps
+    pure $ Argument res
+
+instance gProductProduct ∷
+  ( GProduct codec rep
+  , GProduct codecs reps
   ) ⇒
-  GSum (codec /\ codecs) (Array Json) (Product rep reps) where
-  gSumEncode ∷ Encoding → (codec /\ codecs) → Product rep reps → Array Json
-  gSumEncode encoding (codec /\ codecs) (Product rep reps) =
-    gSumEncode encoding codec rep <> gSumEncode encoding codecs reps
+  GProduct (codec /\ codecs) (Product rep reps) where
+  gProductEncode ∷ Encoding → (codec /\ codecs) → Product rep reps → Array Json
+  gProductEncode encoding (codec /\ codecs) (Product rep reps) =
+    let
+      r1 = gProductEncode encoding codec rep ∷ Array Json
+      r2 = gProductEncode encoding codecs reps ∷ Array Json
+    in
+      r1 <> r2
 
-  gSumDecode ∷ Encoding → (codec /\ codecs) → Array Json → Either JsonDecodeError (Product rep reps)
-  gSumDecode encoding (codec /\ codecs) jsons = do
-    { head, tail } ← note (TypeMismatch "Expecting at least one element") $ Array.uncons jsons
-    rep ← gSumDecode encoding codec [ head ]
-    reps ← gSumDecode encoding codecs tail
+  gProductDecode ∷ Encoding → (codec /\ codecs) → Array Json → Either JsonDecodeError (Product rep reps)
+  gProductDecode encoding (codec /\ codecs) jsons = do
+    { head, tail } ← Array.uncons jsons # note (TypeMismatch "Expecting at least one element") ∷ _ { head ∷ Json, tail ∷ Array Json }
+    rep ← gProductDecode encoding codec [ head ] ∷ _ rep
+    reps ← gProductDecode encoding codecs tail ∷ _ reps
     pure $ Product rep reps
 
-instance gSumArgument ∷ GSum (JsonCodec a) (Array Json) (Argument a) where
-  gSumEncode ∷ Encoding → JsonCodec a → Argument a → Array Json
-  gSumEncode _ codec (Argument val) = [ encode codec val ]
+--------------------------------------------------------------------------------
 
-  gSumDecode ∷ Encoding → Codec'' Json a → Array Json → Either JsonDecodeError (Argument a)
-  gSumDecode _ codec jsons = do
-    case Array.uncons jsons of
-      Just { head, tail: [] } → Argument <$> decode codec head
+checkTag ∷ Encoding → Object Json → String → Either JsonDecodeError Unit
+checkTag encoding obj expectedTag = do
+  val ←
+    ( Obj.lookup encoding.tagKey obj
+        # note (TypeMismatch ("Expecting a tag property `" <> encoding.tagKey <> "`"))
+    ) ∷ _ Json
+  tag ← CA.decode CA.string val ∷ _ String
+  unless (tag == expectedTag)
+    $ throwError
+    $ TypeMismatch ("Expecting tag `" <> expectedTag <> "`, got `" <> tag <> "`")
+
+parseSingleField ∷ Encoding → Object Json → Either JsonDecodeError Json
+parseSingleField encoding obj = do
+  val ←
+    ( Obj.lookup encoding.valuesKey obj
+        # note (TypeMismatch ("Expecting a value property `" <> encoding.valuesKey <> "`"))
+    ) ∷ _ Json
+  if encoding.unwrapSingleArguments then
+    pure val
+  else do
+    fields ← CA.decode CA.jarray val
+    case fields of
+      [ head ] → pure head
       _ → throwError $ TypeMismatch "Expecting exactly one element"
 
-instance gSumNoArguments ∷ GSum Unit (Array Json) NoArguments where
-  gSumEncode ∷ Encoding → Unit → NoArguments → Array Json
-  gSumEncode _ _ _ = []
-
-  gSumDecode ∷ Encoding → Unit → Array Json → Either JsonDecodeError NoArguments
-  gSumDecode _ _ jsons = do
-    when (Array.length jsons /= 0)
+parseNoFields ∷ Encoding → Object Json → Either JsonDecodeError Unit
+parseNoFields encoding obj = do
+  when (not encoding.omitEmptyArguments) do
+    val ←
+      ( Obj.lookup encoding.valuesKey obj
+          # note (TypeMismatch ("Expecting a value property `" <> encoding.valuesKey <> "`"))
+      ) ∷ _ Json
+    fields ← CA.decode CA.jarray val
+    when (fields /= [])
       $ throwError
       $ TypeMismatch "Expecting an empty array"
-    pure NoArguments
 
-type Codec'' lo hi = Codec' (Either JsonDecodeError) lo hi
+parseManyFields ∷ Encoding → Object Json → Either JsonDecodeError (Array Json)
+parseManyFields encoding obj = do
+  val ←
+    ( Obj.lookup encoding.valuesKey obj
+        # note (TypeMismatch ("Expecting a value property `" <> encoding.valuesKey <> "`"))
+    ) ∷ _ Json
+  CA.decode CA.jarray val
 
-class Count ∷ Type → Int → Constraint
-class Count xs n | xs → n
-
-instance countZero ∷ Count Unit 0
-else instance countN ∷ (Count xs n, Add n 1 n') ⇒ Count (JsonCodec a /\ xs) n'
-else instance countOne ∷ Count a 1
+encodeTagged ∷ Encoding → String → Maybe Json → Json
+encodeTagged encoding tag maybeJson = encode jobject $ Obj.fromFoldable $ catMaybes
+  [ Just (encoding.tagKey /\ CA.encode CA.string tag)
+  , map (\json → encoding.valuesKey /\ json) maybeJson
+  ]
