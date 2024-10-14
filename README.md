@@ -1,5 +1,18 @@
 # purescript-codec-argonaut
 
+# ⚠️ This library is deprecated
+
+The `purescript-codec-argonaut` library is now **deprecated** in favor of the [`purescript-codec-json`](https://github.com/garyb/purescript-codec-json) library.
+
+- `purescript-codec-argonaut` relies on the now-deprecated [`purescript-argonaut-core`](https://github.com/purescript-contrib/purescript-argonaut-core).
+- `purescript-codec-json` is built on top of the newer, actively maintained [`purescript-json`](https://github.com/purescript/purescript-json) library.
+
+Since [`purescript-argonaut-core`](https://github.com/purescript-contrib/purescript-argonaut-core) was deprecated in favor of [`purescript-json`](https://github.com/purescript/purescript-json), **`purescript-codec-argonaut` is also deprecated**.
+
+We strongly encourage migrating to [`purescript-codec-json`](https://github.com/garyb/purescript-codec-json) for continued support and future updates. Thank you for your understanding!
+
+----
+
 [![Latest release](http://img.shields.io/github/release/garyb/purescript-codec-argonaut.svg)](https://github.com/garyb/purescript-codec-argonaut/releases)
 ![Build Status](https://github.com/garyb/purescript-codec-argonaut/actions/workflows/ci.yml/badge.svg)
 
