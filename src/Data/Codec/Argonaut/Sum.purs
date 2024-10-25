@@ -16,7 +16,6 @@ module Data.Codec.Argonaut.Sum
 import Prelude
 
 import Control.Alt ((<|>))
-import Control.Monad.Error.Class (throwError)
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Core (Json, fromString) as J
 import Data.Array (catMaybes)
@@ -290,7 +289,7 @@ checkTag tagKey obj expectedTag = do
     ) ∷ _ Json
   tag ← CA.decode CA.string val ∷ _ String
   unless (tag == expectedTag)
-    $ throwError
+    $ Left
     $ TypeMismatch ("Expecting tag `" <> expectedTag <> "`, got `" <> tag <> "`")
 
 parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
@@ -303,7 +302,7 @@ parseNoFields encoding json expectedTag =
         ) ∷ _ Json
       fields ← CA.decode CA.jarray val ∷ _ (Array Json)
       when (fields /= [])
-        $ throwError
+        $ Left
         $ TypeMismatch "Expecting an empty array"
 
     EncodeTagValue { tagKey, valuesKey, omitEmptyArguments } → do
@@ -316,13 +315,13 @@ parseNoFields encoding json expectedTag =
           ) ∷ _ Json
         fields ← CA.decode CA.jarray val ∷ _ (Array Json)
         when (fields /= [])
-          $ throwError
+          $ Left
           $ TypeMismatch "Expecting an empty array"
 
     EncodeUntagged {} → do
       fields ← CA.decode CA.jarray json ∷ _ (Array Json)
       when (fields /= [])
-        $ throwError
+        $ Left
         $ TypeMismatch "Expecting an empty array"
 
 parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
@@ -338,7 +337,7 @@ parseSingleField encoding json expectedTag = case encoding of
       fields ← CA.decode CA.jarray val
       case fields of
         [ head ] → pure head
-        _ → throwError $ TypeMismatch "Expecting exactly one element"
+        _ → Left $ TypeMismatch "Expecting exactly one element"
 
   EncodeTagValue { tagKey, valuesKey, unwrapSingleArguments } → do
     obj ← CA.decode jobject json
@@ -353,7 +352,7 @@ parseSingleField encoding json expectedTag = case encoding of
       fields ← CA.decode CA.jarray val
       case fields of
         [ head ] → pure head
-        _ → throwError $ TypeMismatch "Expecting exactly one element"
+        _ → Left $ TypeMismatch "Expecting exactly one element"
 
   EncodeUntagged { unwrapSingleArguments } → do
     if unwrapSingleArguments then
@@ -362,7 +361,7 @@ parseSingleField encoding json expectedTag = case encoding of
       fields ← CA.decode CA.jarray json
       case fields of
         [ head ] → pure head
-        _ → throwError $ TypeMismatch "Expecting exactly one element"
+        _ → Left $ TypeMismatch "Expecting exactly one element"
 
 parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
 parseManyFields encoding json expectedTag =
