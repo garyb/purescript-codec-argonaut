@@ -9,7 +9,7 @@ import Data.Bifunctor (lmap)
 import Data.Codec (decode, encode)
 import Data.Codec.Argonaut (JsonCodec)
 import Data.Codec.Argonaut as C
-import Data.Codec.Argonaut.Sum (Encoding, defaultEncoding, sumWith)
+import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumWith)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -60,7 +60,7 @@ main ∷ Effect Unit
 main = do
   log "Check sum"
 
-  -- Default encoding
+  log "  - Default encoding"
   do
 
     -- Encode/Decode constructor without arguments
@@ -96,129 +96,139 @@ main = do
           , "}"
           ]
 
-  -- Custom tag and values keys
+  log "  - EncodeTagValue"
   do
-    let
-      opts = defaultEncoding
-        { tagKey = "customTag"
-        , valuesKey = "customValues"
-        }
-    check
-      (codecSample opts)
-      Foo
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Foo\","
-          , "  \"customValues\": []"
-          , "}"
-          ]
+    log "    - Custom tag and values keys"
+    do
+      let
+        opts = EncodeTagValue
+          { tagKey: "customTag"
+          , valuesKey: "customValues"
+          , omitEmptyArguments: false
+          , unwrapSingleArguments: false
+          }
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"customTag\": \"Foo\","
+            , "  \"customValues\": []"
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Bar 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Bar\","
-          , "  \"customValues\": ["
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"customTag\": \"Bar\","
+            , "  \"customValues\": ["
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Baz true "hello" 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"customTag\": \"Baz\","
-          , "  \"customValues\": ["
-          , "    true,"
-          , "    \"hello\","
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"customTag\": \"Baz\","
+            , "  \"customValues\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
 
-  -- Option: Omit empty arguments 
-  do
-    let
-      opts = defaultEncoding
-        { omitEmptyArguments = true
-        }
-    check
-      (codecSample opts)
-      Foo
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Foo\""
-          , "}"
-          ]
+    log "    - Option: Omit empty arguments"
+    do
+      let
+        opts = EncodeTagValue
+          { tagKey: "tag"
+          , valuesKey: "values"
+          , omitEmptyArguments: true
+          , unwrapSingleArguments: false
+          }
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Foo\""
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Bar 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Bar\","
-          , "  \"values\": ["
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Bar\","
+            , "  \"values\": ["
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Baz true "hello" 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Baz\","
-          , "  \"values\": ["
-          , "    true,"
-          , "    \"hello\","
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Baz\","
+            , "  \"values\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
 
-  -- Option: Unwrap single arguments
-  do
-    let
-      opts = defaultEncoding
-        { unwrapSingleArguments = true
-        }
-    check
-      (codecSample opts)
-      Foo
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Foo\","
-          , "  \"values\": []"
-          , "}"
-          ]
+    log "    - Option: Unwrap single arguments"
+    do
+      let
+        opts = EncodeTagValue
+          { tagKey: "tag"
+          , valuesKey: "values"
+          , omitEmptyArguments: false
+          , unwrapSingleArguments: true
+          }
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Foo\","
+            , "  \"values\": []"
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Bar 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Bar\","
-          , "  \"values\": 42"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Bar\","
+            , "  \"values\": 42"
+            , "}"
+            ]
 
-    check
-      (codecSample opts)
-      (Baz true "hello" 42)
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Baz\","
-          , "  \"values\": ["
-          , "    true,"
-          , "    \"hello\","
-          , "    42"
-          , "  ]"
-          , "}"
-          ]
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Baz\","
+            , "  \"values\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
 
   quickCheck (propCodec genMySum (codecSample defaultEncoding))
 
