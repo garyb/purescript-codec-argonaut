@@ -40,7 +40,6 @@ import Foreign.Object.ST as FOST
 import Prim.Row as Row
 import Record as Record
 import Type.Proxy (Proxy(..))
-import Unsafe.Coerce (unsafeCoerce)
 
 -- | A helper for defining JSON codecs for "enum" sum types, where every
 -- | constructor is nullary, and the type will be encoded as a string.
@@ -109,6 +108,8 @@ data Encoding
       , omitEmptyArguments ∷ Boolean
       , unwrapSingleArguments ∷ Boolean
       }
+  | EncodeUntagged
+      { unwrapSingleArguments ∷ Boolean }
 
 defaultEncoding ∷ Encoding
 defaultEncoding = EncodeTagValue
@@ -149,7 +150,7 @@ instance gCasesConstructorNoArgs ∷
     let
       name = reflectSymbol @name Proxy ∷ String
     in
-      encodeCase encoding name []
+      encodeSumCase encoding name []
 
   gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name NoArguments)
   gCasesDecode encoding _ json = do
@@ -169,7 +170,7 @@ else instance gCasesConstructorSingleArg ∷
       codec = Record.get (Proxy @name) r ∷ JsonCodec a
       name = reflectSymbol @name Proxy ∷ String
     in
-      encodeCase encoding name [ CA.encode codec x ]
+      encodeSumCase encoding name [ CA.encode codec x ]
 
   gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name (Argument a))
   gCasesDecode encoding r json = do
@@ -193,7 +194,7 @@ else instance gCasesConstructorManyArgs ∷
       name = reflectSymbol @name Proxy ∷ String
       jsons = gFieldsEncode encoding codecs rep ∷ Array Json
     in
-      encodeCase encoding name jsons
+      encodeSumCase encoding name jsons
 
   gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name args)
   gCasesDecode encoding r json = do
@@ -292,9 +293,53 @@ checkTag tagKey obj expectedTag = do
     $ throwError
     $ TypeMismatch ("Expecting tag `" <> expectedTag <> "`, got `" <> tag <> "`")
 
+parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
+parseNoFields encoding json expectedTag =
+  case encoding of
+    EncodeCtorAsTag {} → do
+      obj ← CA.decode jobject json
+      val ←
+        ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+        ) ∷ _ Json
+      fields ← CA.decode CA.jarray val ∷ _ (Array Json)
+      when (fields /= [])
+        $ throwError
+        $ TypeMismatch "Expecting an empty array"
+
+    EncodeTagValue { tagKey, valuesKey, omitEmptyArguments } → do
+      obj ← CA.decode jobject json
+      checkTag tagKey obj expectedTag
+      when (not omitEmptyArguments) do
+        val ←
+          ( Obj.lookup valuesKey obj
+              # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
+          ) ∷ _ Json
+        fields ← CA.decode CA.jarray val ∷ _ (Array Json)
+        when (fields /= [])
+          $ throwError
+          $ TypeMismatch "Expecting an empty array"
+
+    EncodeUntagged {} → do
+      fields ← CA.decode CA.jarray json ∷ _ (Array Json)
+      when (fields /= [])
+        $ throwError
+        $ TypeMismatch "Expecting an empty array"
+
 parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
 parseSingleField encoding json expectedTag = case encoding of
-  EncodeCtorAsTag { unwrapSingleArguments } → unsafeCoerce "todo"
+  EncodeCtorAsTag { unwrapSingleArguments } → do
+    obj ← CA.decode jobject json
+    val ←
+      ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+      ) ∷ _ Json
+    if unwrapSingleArguments then
+      pure val
+    else do
+      fields ← CA.decode CA.jarray val
+      case fields of
+        [ head ] → pure head
+        _ → throwError $ TypeMismatch "Expecting exactly one element"
+
   EncodeTagValue { tagKey, valuesKey, unwrapSingleArguments } → do
     obj ← CA.decode jobject json
     checkTag tagKey obj expectedTag
@@ -310,28 +355,25 @@ parseSingleField encoding json expectedTag = case encoding of
         [ head ] → pure head
         _ → throwError $ TypeMismatch "Expecting exactly one element"
 
-parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
-parseNoFields encoding json expectedTag =
-  case encoding of
-    EncodeCtorAsTag { unwrapSingleArguments } → unsafeCoerce "todo"
-    EncodeTagValue { tagKey, valuesKey, omitEmptyArguments } →
-      do
-        obj ← CA.decode jobject json
-        checkTag tagKey obj expectedTag
-        when (not omitEmptyArguments) do
-          val ←
-            ( Obj.lookup valuesKey obj
-                # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
-            ) ∷ _ Json
-          fields ← CA.decode CA.jarray val ∷ _ (Array Json)
-          when (fields /= [])
-            $ throwError
-            $ TypeMismatch "Expecting an empty array"
+  EncodeUntagged { unwrapSingleArguments } → do
+    if unwrapSingleArguments then
+      pure json
+    else do
+      fields ← CA.decode CA.jarray json
+      case fields of
+        [ head ] → pure head
+        _ → throwError $ TypeMismatch "Expecting exactly one element"
 
 parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
 parseManyFields encoding json expectedTag =
   case encoding of
-    EncodeCtorAsTag { unwrapSingleArguments } → unsafeCoerce "todo"
+    EncodeCtorAsTag {} → do
+      obj ← CA.decode jobject json
+      val ←
+        ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+        ) ∷ _ Json
+      CA.decode CA.jarray val
+
     EncodeTagValue { tagKey, valuesKey } → do
       obj ← CA.decode jobject json
       checkTag tagKey obj expectedTag
@@ -341,10 +383,23 @@ parseManyFields encoding json expectedTag =
         ) ∷ _ Json
       CA.decode CA.jarray val
 
-encodeCase ∷ Encoding → String → Array Json → Json
-encodeCase encoding tag jsons =
+    EncodeUntagged {} →
+      CA.decode CA.jarray json
+
+encodeSumCase ∷ Encoding → String → Array Json → Json
+encodeSumCase encoding tag jsons =
   case encoding of
-    EncodeCtorAsTag { unwrapSingleArguments } → unsafeCoerce "todo"
+    EncodeCtorAsTag { unwrapSingleArguments } →
+      let
+        val = case jsons of
+          [] → CA.encode CA.jarray []
+          [ json ] | unwrapSingleArguments → json
+          manyJsons → CA.encode CA.jarray manyJsons
+      in
+        encode jobject $ Obj.fromFoldable
+          [ tag /\ val
+          ]
+
     EncodeTagValue { tagKey, valuesKey, unwrapSingleArguments, omitEmptyArguments } →
       let
         tagEntry =
@@ -357,3 +412,9 @@ encodeCase encoding tag jsons =
       in
         encode jobject $ Obj.fromFoldable $ catMaybes
           [ tagEntry, valEntry ]
+
+    EncodeUntagged { unwrapSingleArguments } →
+      case jsons of
+        [] → CA.encode CA.jarray []
+        [ json ] | unwrapSingleArguments → json
+        manyJsons → CA.encode CA.jarray manyJsons

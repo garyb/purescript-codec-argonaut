@@ -107,6 +107,7 @@ main = do
           , omitEmptyArguments: false
           , unwrapSingleArguments: false
           }
+
       check
         (codecSample opts)
         Foo
@@ -152,6 +153,7 @@ main = do
           , omitEmptyArguments: true
           , unwrapSingleArguments: false
           }
+
       check
         (codecSample opts)
         Foo
@@ -196,6 +198,7 @@ main = do
           , omitEmptyArguments: false
           , unwrapSingleArguments: true
           }
+
       check
         (codecSample opts)
         Foo
@@ -228,6 +231,152 @@ main = do
             , "    42"
             , "  ]"
             , "}"
+            ]
+
+  log "  - EncodeCtorAsTag"
+  do
+    log "    - default"
+    do
+      let
+        opts = EncodeCtorAsTag
+          { unwrapSingleArguments: false
+          }
+
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Foo\": []"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Bar\": ["
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Baz\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
+    log "    - Option: Unwrap single arguments"
+    do
+      let
+        opts = EncodeCtorAsTag
+          { unwrapSingleArguments: true
+          }
+
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Foo\": []"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Bar\": 42"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Baz\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
+  log "  - EncodeUntagged"
+  do
+    log "    - default"
+    do
+      let
+        opts = EncodeUntagged
+          { unwrapSingleArguments: false
+          }
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "[]"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "["
+            , "  42"
+            , "]"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "["
+            , "  true,"
+            , "  \"hello\","
+            , "  42"
+            , "]"
+            ]
+
+    log "    - Option: Unwrap single arguments"
+    do
+      let
+        opts = EncodeUntagged
+          { unwrapSingleArguments: true
+          }
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "[]"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "42"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "["
+            , "  true,"
+            , "  \"hello\","
+            , "  42"
+            , "]"
             ]
 
   quickCheck (propCodec genMySum (codecSample defaultEncoding))
