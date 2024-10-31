@@ -39,6 +39,7 @@ import Foreign.Object.ST as FOST
 import Prim.Row as Row
 import Record as Record
 import Type.Proxy (Proxy(..))
+import Unsafe.Coerce (unsafeCoerce)
 
 -- | A helper for defining JSON codecs for "enum" sum types, where every
 -- | constructor is nullary, and the type will be encoded as a string.
@@ -217,7 +218,7 @@ instance gCasesSum ∷
     let
       codecs1 = Record.get (Proxy @name) r ∷ codecs1
       r1 = Record.insert (Proxy @name) codecs1 {} ∷ Record r1
-      r2 = Record.delete (Proxy @name) r ∷ Record r2
+      r2 = unsafeDelete (Proxy @name) r ∷ Record r2
     in
       case _ of
         Inl lhs → gCasesEncode encoding r1 lhs
@@ -391,3 +392,8 @@ encodeSumCase encoding tag jsons =
       in
         encode jobject $ Obj.fromFoldable $ catMaybes
           [ tagEntry, valEntry ]
+
+-- | Same as `Record.delete` deleting only happens at the type level
+-- | and the value is left untouched.
+unsafeDelete ∷ ∀ r1 r2 l a. IsSymbol l ⇒ Row.Lacks l r1 ⇒ Row.Cons l a r1 r2 ⇒ Proxy l → Record r2 → Record r1
+unsafeDelete _ r = unsafeCoerce r
