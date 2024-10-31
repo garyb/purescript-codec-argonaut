@@ -96,12 +96,12 @@ main = do
           , "}"
           ]
 
-  log "  - EncodeTagValue"
+  log "  - EncodeTagged"
   do
     log "    - Custom tag and values keys"
     do
       let
-        opts = EncodeTagValue
+        opts = EncodeTagged
           { tagKey: "customTag"
           , valuesKey: "customValues"
           , omitEmptyArguments: false
@@ -147,7 +147,7 @@ main = do
     log "    - Option: Omit empty arguments"
     do
       let
-        opts = EncodeTagValue
+        opts = EncodeTagged
           { tagKey: "tag"
           , valuesKey: "values"
           , omitEmptyArguments: true
@@ -192,7 +192,7 @@ main = do
     log "    - Option: Unwrap single arguments"
     do
       let
-        opts = EncodeTagValue
+        opts = EncodeTagged
           { tagKey: "tag"
           , valuesKey: "values"
           , omitEmptyArguments: false
@@ -233,12 +233,12 @@ main = do
             , "}"
             ]
 
-  log "  - EncodeCtorAsTag"
+  log "  - EncodeNested"
   do
     log "    - default"
     do
       let
-        opts = EncodeCtorAsTag
+        opts = EncodeNested
           { unwrapSingleArguments: false
           }
 
@@ -278,7 +278,7 @@ main = do
     log "    - Option: Unwrap single arguments"
     do
       let
-        opts = EncodeCtorAsTag
+        opts = EncodeNested
           { unwrapSingleArguments: true
           }
 

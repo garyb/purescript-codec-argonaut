@@ -99,9 +99,9 @@ taggedSum name printTag parseTag f g = Codec.codec decodeCase encodeCase
 --------------------------------------------------------------------------------
 
 data Encoding
-  = EncodeCtorAsTag
+  = EncodeNested
       { unwrapSingleArguments ∷ Boolean }
-  | EncodeTagValue
+  | EncodeTagged
       { tagKey ∷ String
       , valuesKey ∷ String
       , omitEmptyArguments ∷ Boolean
@@ -109,7 +109,7 @@ data Encoding
       }
 
 defaultEncoding ∷ Encoding
-defaultEncoding = EncodeTagValue
+defaultEncoding = EncodeTagged
   { tagKey: "tag"
   , valuesKey: "values"
   , unwrapSingleArguments: false
@@ -293,7 +293,7 @@ checkTag tagKey obj expectedTag = do
 parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
 parseNoFields encoding json expectedTag =
   case encoding of
-    EncodeCtorAsTag {} → do
+    EncodeNested {} → do
       obj ← CA.decode jobject json
       val ←
         ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
@@ -303,7 +303,7 @@ parseNoFields encoding json expectedTag =
         $ Left
         $ TypeMismatch "Expecting an empty array"
 
-    EncodeTagValue { tagKey, valuesKey, omitEmptyArguments } → do
+    EncodeTagged { tagKey, valuesKey, omitEmptyArguments } → do
       obj ← CA.decode jobject json
       checkTag tagKey obj expectedTag
       when (not omitEmptyArguments) do
@@ -318,7 +318,7 @@ parseNoFields encoding json expectedTag =
 
 parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
 parseSingleField encoding json expectedTag = case encoding of
-  EncodeCtorAsTag { unwrapSingleArguments } → do
+  EncodeNested { unwrapSingleArguments } → do
     obj ← CA.decode jobject json
     val ←
       ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
@@ -331,7 +331,7 @@ parseSingleField encoding json expectedTag = case encoding of
         [ head ] → pure head
         _ → Left $ TypeMismatch "Expecting exactly one element"
 
-  EncodeTagValue { tagKey, valuesKey, unwrapSingleArguments } → do
+  EncodeTagged { tagKey, valuesKey, unwrapSingleArguments } → do
     obj ← CA.decode jobject json
     checkTag tagKey obj expectedTag
     val ←
@@ -349,14 +349,14 @@ parseSingleField encoding json expectedTag = case encoding of
 parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
 parseManyFields encoding json expectedTag =
   case encoding of
-    EncodeCtorAsTag {} → do
+    EncodeNested {} → do
       obj ← CA.decode jobject json
       val ←
         ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
         ) ∷ _ Json
       CA.decode CA.jarray val
 
-    EncodeTagValue { tagKey, valuesKey } → do
+    EncodeTagged { tagKey, valuesKey } → do
       obj ← CA.decode jobject json
       checkTag tagKey obj expectedTag
       val ←
@@ -368,7 +368,7 @@ parseManyFields encoding json expectedTag =
 encodeSumCase ∷ Encoding → String → Array Json → Json
 encodeSumCase encoding tag jsons =
   case encoding of
-    EncodeCtorAsTag { unwrapSingleArguments } →
+    EncodeNested { unwrapSingleArguments } →
       let
         val = case jsons of
           [] → CA.encode CA.jarray []
@@ -379,7 +379,7 @@ encodeSumCase encoding tag jsons =
           [ tag /\ val
           ]
 
-    EncodeTagValue { tagKey, valuesKey, unwrapSingleArguments, omitEmptyArguments } →
+    EncodeTagged { tagKey, valuesKey, unwrapSingleArguments, omitEmptyArguments } →
       let
         tagEntry =
           Just (tagKey /\ CA.encode CA.string tag) ∷ Maybe (String /\ Json)
