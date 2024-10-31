@@ -393,7 +393,7 @@ encodeSumCase encoding tag jsons =
         encode jobject $ Obj.fromFoldable $ catMaybes
           [ tagEntry, valEntry ]
 
--- | Same as `Record.delete` deleting only happens at the type level
+-- | Same as `Record.delete` but deleting only happens at the type level
 -- | and the value is left untouched.
 unsafeDelete ∷ ∀ r1 r2 l a. IsSymbol l ⇒ Row.Lacks l r1 ⇒ Row.Cons l a r1 r2 ⇒ Proxy l → Record r2 → Record r1
 unsafeDelete _ r = unsafeCoerce r
