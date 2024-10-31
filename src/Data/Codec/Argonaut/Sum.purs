@@ -107,8 +107,6 @@ data Encoding
       , omitEmptyArguments ∷ Boolean
       , unwrapSingleArguments ∷ Boolean
       }
-  | EncodeUntagged
-      { unwrapSingleArguments ∷ Boolean }
 
 defaultEncoding ∷ Encoding
 defaultEncoding = EncodeTagValue
@@ -318,12 +316,6 @@ parseNoFields encoding json expectedTag =
           $ Left
           $ TypeMismatch "Expecting an empty array"
 
-    EncodeUntagged {} → do
-      fields ← CA.decode CA.jarray json ∷ _ (Array Json)
-      when (fields /= [])
-        $ Left
-        $ TypeMismatch "Expecting an empty array"
-
 parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
 parseSingleField encoding json expectedTag = case encoding of
   EncodeCtorAsTag { unwrapSingleArguments } → do
@@ -354,15 +346,6 @@ parseSingleField encoding json expectedTag = case encoding of
         [ head ] → pure head
         _ → Left $ TypeMismatch "Expecting exactly one element"
 
-  EncodeUntagged { unwrapSingleArguments } → do
-    if unwrapSingleArguments then
-      pure json
-    else do
-      fields ← CA.decode CA.jarray json
-      case fields of
-        [ head ] → pure head
-        _ → Left $ TypeMismatch "Expecting exactly one element"
-
 parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
 parseManyFields encoding json expectedTag =
   case encoding of
@@ -381,9 +364,6 @@ parseManyFields encoding json expectedTag =
             # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
         ) ∷ _ Json
       CA.decode CA.jarray val
-
-    EncodeUntagged {} →
-      CA.decode CA.jarray json
 
 encodeSumCase ∷ Encoding → String → Array Json → Json
 encodeSumCase encoding tag jsons =
@@ -411,9 +391,3 @@ encodeSumCase encoding tag jsons =
       in
         encode jobject $ Obj.fromFoldable $ catMaybes
           [ tagEntry, valEntry ]
-
-    EncodeUntagged { unwrapSingleArguments } →
-      case jsons of
-        [] → CA.encode CA.jarray []
-        [ json ] | unwrapSingleArguments → json
-        manyJsons → CA.encode CA.jarray manyJsons
