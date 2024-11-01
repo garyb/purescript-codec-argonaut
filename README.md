@@ -169,6 +169,8 @@ codecSample = sum "Sample"
 
 The special case of a constructor with zero arguments like `Foo`, we just use `unit` instead of a tuple.
 
+#### Custom encodings
+
 If you need control of the actual encoding being used, there's also [`sumWith`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Sum.Sum#v:sumWith). It takes an extra argument of type [`Encoding`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Sum#v:Encoding)
 
 Generally two types of encodings are supported:
@@ -180,6 +182,7 @@ Generally two types of encodings are supported:
 
 There are also a couple of extra options that can be specified. E.g. for custom field names instead of `"tag"` and `"value"`. 
 
+#### Sum types with only nullary constructors
 
 If you have a sum type that only consists of nullary constructors and it has a [`Generic`](https://pursuit.purescript.org/packages/purescript-generics-rep/docs/Data.Generic.Rep#t:Generic) instance defined, [`nullarySum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic#v:nullarySum) provided by [`Data.Codec.Argonaut.Generic`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic) can generate a codec that will encode the constructors as string values matching the constructor names in the JSON.
 
