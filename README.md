@@ -159,6 +159,8 @@ derive instance Generic Sample _
 A simple codec for `Sample` can be created like this in a type safe way:
 
 ```purescript
+import Data.Codec.Argonaut (sum, sumWith)
+
 codecSample ∷ JsonCodec Sample
 codecSample = sum "Sample"
   { "Foo": unit
