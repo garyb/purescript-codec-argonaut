@@ -141,9 +141,57 @@ If the value being decoded has no `email` field, the resulting `Person` will hav
 
 This combinator only deals with entirely missing properties, so values like `null` will still need to be handled explicitly.
 
-### Sum types and variants
+### Sum types
 
-This library comes with codec support for [`purescript-variant`](https://github.com/natefaubion/purescript-variant) out of the box and codecs for sums are often based on the variant codec.
+Codecs for sum types can be easily defined by using the [`sum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Sum#v:sum) function. You need to provide a record of the case constructor names, whereas each record value holds a (nested) tuple of codecs for the constructor fields.
+
+Let's look at an example sum type, it has 3 constructors. The first one has zero fields, the seconds has one field and the third one has three fields.
+
+```purescript
+data Sample
+  = Foo
+  | Bar Int
+  | Baz Boolean String Int
+
+derive instance Generic Sample _
+```
+
+A simple codec for `Sample` can be created like this in a type safe way:
+
+```purescript
+import Data.Codec.Argonaut.Sum as CAS
+import Data.Codec.Argonaut as CA
+
+codecSample ∷ JsonCodec Sample
+codecSample = CAS.sum "Sample"
+  { "Foo": unit
+  , "Bar": CA.int
+  , "Baz": CA.boolean /\ CA.string /\ CA.int
+  }
+```
+
+The special case of a constructor with zero arguments like `Foo`, we just use `unit` instead of a tuple.
+
+#### Custom encodings
+
+If you need control of the actual encoding being used, there's also [`sumWith`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Sum.Sum#v:sumWith). It takes an extra argument of type [`Encoding`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Sum#v:Encoding)
+
+Generally two types of encodings are supported:
+
+- Nested
+  `{"Baz": [true, "abc", 42]}`
+- Tagged
+  `{"tag": "Baz", "values": [true, "abc", 42]}`
+
+There are also a couple of extra options that can be specified. E.g. for custom field names instead of `"tag"` and `"value"`. 
+
+#### Sum types with only nullary constructors
+
+If you have a sum type that only consists of nullary constructors and it has a [`Generic`](https://pursuit.purescript.org/packages/purescript-generics-rep/docs/Data.Generic.Rep#t:Generic) instance defined, [`nullarySum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic#v:nullarySum) provided by [`Data.Codec.Argonaut.Generic`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic) can generate a codec that will encode the constructors as string values matching the constructor names in the JSON.
+
+### Variant types
+
+This library comes with codec support for [`purescript-variant`](https://github.com/natefaubion/purescript-variant) out of the box.
 
 First of all, variants. Similar to the object/record case there are a few options for defining variant codecs, but most commonly they will be defined with [`variantMatch`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Variant#v:variantMatch) provided by [`Data.Codec.Argonaut.Variant`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Variant):
 
@@ -179,44 +227,6 @@ The variant codec is a little opinionated since there's no exactly corresponding
 
 `value` will be omitted for nullary / `Left`-defined constructors. At the moment it is not possible to customise the encoding for variant types, so they may not be suitable if you are not in control of the serialization format.
 
-Sum type encoding is usually handled by building a variant codec, and then using [`dimap`](https://pursuit.purescript.org/packages/purescript-profunctor/docs/Data.Profunctor#v:dimap) to inject into/project out of a corresponding sum type:
-
-```purescript
-import Prelude
-
-import Data.Codec.Argonaut as CA
-import Data.Codec.Argonaut.Variant as CAV
-import Data.Either (Either(..))
-import Data.Profunctor (dimap)
-import Data.Variant as V
-import Type.Proxy (Proxy(..))
-
-data SomeValue2 = Str String | Int Int | Neither
-
-codec ∷ CA.JsonCodec SomeValue2
-codec =
-  dimap toVariant fromVariant $ CAV.variantMatch
-    { str: Right CA.string
-    , int: Right CA.int
-    , neither: Left unit
-    }
-  where
-    toVariant = case _ of
-      Str s → V.inj (Proxy ∷ _ "str") s
-      Int i → V.inj (Proxy ∷ _ "int") i
-      Neither → V.inj (Proxy ∷ _ "neither") unit
-    fromVariant = V.match
-      { str: Str
-      , int: Int
-      , neither: \_ → Neither
-      }
-```
-
-This certainly is a little boilerplate-y, but at least when defining codecs this way you do gain the benefits of having a single definition that aligns the encoding and decoding behaviour. This means, assuming there are no mixups in `toVariant`/`fromVariant`, the guaranteed roundtripping is preserved. Often it's not even possible to have mixups during `dimap`, since the sum constructor types will all differ.
-
-If you have a sum type that only consists of nullary constructors and it has a [`Generic`](https://pursuit.purescript.org/packages/purescript-generics-rep/docs/Data.Generic.Rep#t:Generic) instance defined, [`nullarySum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic#v:nullarySum) provided by [`Data.Codec.Argonaut.Generic`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Generic) can generate a codec that will encode the constructors as string values matching the constructor names in the JSON.
-
-The story for sum type codecs outside of these options isn't great just now. There are some functions provided in [`Data.Codec.Argonaut.Sum`](https://pursuit.purescript.org/packages/purescript-codec-argonaut/docs/Data.Codec.Argonaut.Sum) for defining them, but these are more error prone than the variant method, and use the same encoding methods described above. Often it's just as easy to construct a codec from scratch with [`basicCodec`](https://pursuit.purescript.org/packages/purescript-codec/docs/Data.Codec#v:basicCodec) from [`Data.Codec`](https://pursuit.purescript.org/packages/purescript-codec/docs/Data.Codec), although means it's up to you to ensure the roundtrip succeeds.
 
 ### Other common types
 
