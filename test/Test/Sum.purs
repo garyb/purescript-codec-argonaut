@@ -20,7 +20,6 @@ import Effect.Console (log)
 import Effect.Exception (error, throw)
 import Test.QuickCheck (class Arbitrary, arbitrary, quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
-import Test.QuickCheck.Gen (Gen)
 import Test.Util (propCodec)
 
 --------------------------------------------------------------------------------
@@ -51,7 +50,11 @@ codecSample encoding = sumWith encoding "Sample"
 data SampleFlat
   = FlatFoo
   | FlatBar { errors ∷ Int }
-  | FlatBaz { active ∷ Boolean, name ∷ String, count ∷ Int }
+  | FlatBaz
+      { active ∷ Boolean
+      , name ∷ String
+      , pos ∷ { x ∷ Int, y ∷ Int }
+      }
 
 derive instance Generic SampleFlat _
 derive instance Eq SampleFlat
@@ -66,7 +69,14 @@ codecSampleFlat ∷ JsonCodec SampleFlat
 codecSampleFlat = sumFlat @"tag" "Sample"
   { "FlatFoo": unit
   , "FlatBar": CR.record { errors: C.int }
-  , "FlatBaz": CR.record { active: C.boolean, name: C.string, count: C.int }
+  , "FlatBaz": CR.record
+      { active: C.boolean
+      , name: C.string
+      , pos: CR.object "Pos"
+          { x: C.int
+          , y: C.int
+          }
+      }
   }
 
 --------------------------------------------------------------------------------
@@ -360,13 +370,16 @@ main = do
           , "}"
           ]
 
-    check codecSampleFlat (FlatBaz { active: true, name: "hello", count: 42 })
+    check codecSampleFlat (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
       $ Str.joinWith "\n"
           [ "{"
           , "  \"tag\": \"FlatBaz\","
           , "  \"active\": true,"
-          , "  \"count\": 42,"
-          , "  \"name\": \"hello\""
+          , "  \"name\": \"hello\","
+          , "  \"pos\": {"
+          , "    \"x\": 42,"
+          , "    \"y\": 42"
+          , "  }"
           , "}"
           ]
 
