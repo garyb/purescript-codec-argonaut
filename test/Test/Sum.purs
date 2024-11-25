@@ -10,7 +10,7 @@ import Data.Codec (decode, encode)
 import Data.Codec.Argonaut (JsonCodec)
 import Data.Codec.Argonaut as C
 import Data.Codec.Argonaut.Record as CR
-import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlat, sumWith)
+import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlat, sumFlatWith, sumWith)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -21,6 +21,8 @@ import Effect.Exception (error, throw)
 import Test.QuickCheck (class Arbitrary, arbitrary, quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
 import Test.Util (propCodec)
+import Type.Prelude (Proxy(..))
+import Type.Proxy (Proxy)
 
 --------------------------------------------------------------------------------
 
@@ -66,7 +68,7 @@ instance Show SampleFlat where
   show = genericShow
 
 codecSampleFlat ∷ JsonCodec SampleFlat
-codecSampleFlat = sumFlat @"tag" "Sample"
+codecSampleFlat = sumFlatWith { tag: Proxy @"tag" } "Sample"
   { "FlatFoo": unit
   , "FlatBar": CR.record { errors: C.int }
   , "FlatBaz": CR.record

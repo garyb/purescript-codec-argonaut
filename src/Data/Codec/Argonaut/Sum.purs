@@ -1,21 +1,25 @@
 module Data.Codec.Argonaut.Sum
   ( Encoding(..)
+  , FlatEncoding
   , class GCases
   , class GFields
+  , class GFlatCases
   , defaultEncoding
+  , defaultFlatEncoding
   , enumSum
   , gCasesDecode
   , gCasesEncode
   , gFieldsDecode
   , gFieldsEncode
+  , gFlatCasesDecode
+  , gFlatCasesEncode
   , sum
+  , sumFlat
+  , sumFlatWith
   , sumWith
   , taggedSum
-  , sumFlat
-  , class GFlatCases
-  , gFlatCasesEncode
-  , gFlatCasesDecode
-  ) where
+  )
+  where
 
 import Prelude
 
@@ -398,8 +402,18 @@ encodeSumCase encoding tag jsons =
         encode jobject $ Obj.fromFoldable $ catMaybes
           [ tagEntry, valEntry ]
 
-sumFlat ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
-sumFlat name r =
+type FlatEncoding (tag ∷ Symbol) =
+  { tag ∷ Proxy tag
+  }
+
+defaultFlatEncoding ∷ FlatEncoding "tag"
+defaultFlatEncoding = { tag: Proxy }
+
+sumFlat ∷ ∀ r rep a. GFlatCases "tag" r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
+sumFlat = sumFlatWith defaultFlatEncoding
+
+sumFlatWith ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag -> String → Record r → JsonCodec a
+sumFlatWith _ name r =
   dimap from to $ codec' dec enc
   where
   dec = gFlatCasesDecode @tag r >>> (lmap $ Named name)
