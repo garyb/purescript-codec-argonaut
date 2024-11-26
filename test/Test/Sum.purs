@@ -9,7 +9,8 @@ import Data.Bifunctor (lmap)
 import Data.Codec (decode, encode)
 import Data.Codec.Argonaut (JsonCodec)
 import Data.Codec.Argonaut as C
-import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumWith)
+import Data.Codec.Argonaut.Record as CR
+import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlat, sumFlatWith, sumWith)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -17,10 +18,13 @@ import Data.Tuple.Nested ((/\))
 import Effect (Effect)
 import Effect.Console (log)
 import Effect.Exception (error, throw)
-import Test.QuickCheck (quickCheck)
+import Test.QuickCheck (class Arbitrary, arbitrary, quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
-import Test.QuickCheck.Gen (Gen)
 import Test.Util (propCodec)
+import Type.Prelude (Proxy(..))
+import Type.Proxy (Proxy)
+
+--------------------------------------------------------------------------------
 
 data Sample
   = Foo
@@ -30,8 +34,8 @@ data Sample
 derive instance Generic Sample _
 derive instance Eq Sample
 
-genMySum ∷ Gen Sample
-genMySum = genericArbitrary
+instance Arbitrary Sample where
+  arbitrary = genericArbitrary
 
 instance Show Sample where
   show = genericShow
@@ -42,6 +46,42 @@ codecSample encoding = sumWith encoding "Sample"
   , "Bar": C.int
   , "Baz": C.boolean /\ C.string /\ C.int
   }
+
+--------------------------------------------------------------------------------
+
+data SampleFlat
+  = FlatFoo
+  | FlatBar { errors ∷ Int }
+  | FlatBaz
+      { active ∷ Boolean
+      , name ∷ String
+      , pos ∷ { x ∷ Int, y ∷ Int }
+      }
+
+derive instance Generic SampleFlat _
+derive instance Eq SampleFlat
+
+instance Arbitrary SampleFlat where
+  arbitrary = genericArbitrary
+
+instance Show SampleFlat where
+  show = genericShow
+
+codecSampleFlat ∷ JsonCodec SampleFlat
+codecSampleFlat = sumFlatWith { tag: Proxy @"tag" } "Sample"
+  { "FlatFoo": unit
+  , "FlatBar": CR.record { errors: C.int }
+  , "FlatBaz": CR.record
+      { active: C.boolean
+      , name: C.string
+      , pos: CR.object "Pos"
+          { x: C.int
+          , y: C.int
+          }
+      }
+  }
+
+--------------------------------------------------------------------------------
 
 check ∷ ∀ a. Show a ⇒ Eq a ⇒ JsonCodec a → a → String → Effect Unit
 check codec val expectEncoded = do
@@ -313,5 +353,37 @@ main = do
             , "}"
             ]
 
-  quickCheck (propCodec genMySum (codecSample defaultEncoding))
+  quickCheck (propCodec arbitrary (codecSample defaultEncoding))
+
+  log "Check sum flat"
+  do
+    check codecSampleFlat FlatFoo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatFoo\""
+          , "}"
+          ]
+
+    check codecSampleFlat (FlatBar { errors: 42 })
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatBar\","
+          , "  \"errors\": 42"
+          , "}"
+          ]
+
+    check codecSampleFlat (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatBaz\","
+          , "  \"active\": true,"
+          , "  \"name\": \"hello\","
+          , "  \"pos\": {"
+          , "    \"x\": 42,"
+          , "    \"y\": 42"
+          , "  }"
+          , "}"
+          ]
+
+    quickCheck (propCodec arbitrary codecSampleFlat)
 
