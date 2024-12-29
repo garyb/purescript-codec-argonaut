@@ -18,12 +18,10 @@ module Data.Codec.Argonaut.Sum
   , sumFlatWith
   , sumWith
   , taggedSum
-  )
-  where
+  ) where
 
 import Prelude
 
-import Control.Alt ((<|>))
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Core (Json, fromString) as J
 import Data.Array (catMaybes)
@@ -34,10 +32,11 @@ import Data.Codec as Codec
 import Data.Codec.Argonaut (JPropCodec, JsonCodec, JsonDecodeError(..), jobject)
 import Data.Codec.Argonaut as CA
 import Data.Codec.Argonaut.Record as CAR
-import Data.Either (Either(..), note)
+import Data.Either (Either(..), either, note)
 import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), NoArguments(..), Product(..), Sum(..), from, to)
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..), maybe, maybe')
 import Data.Profunctor (dimap)
+import Data.String (joinWith)
 import Data.Symbol (class IsSymbol, reflectSymbol)
 import Data.Tuple (Tuple(..))
 import Data.Tuple.Nested (type (/\), (/\))
@@ -128,6 +127,21 @@ defaultEncoding = EncodeTagged
 
 --------------------------------------------------------------------------------
 
+mapError ∷ ∀ r. Maybe String → Object Json → Either JsonDecodeError (Maybe r) → Either JsonDecodeError r
+mapError mbTag obj =
+  either Left (maybe' noMatchErr Right)
+  where
+  getTagErr tag =
+    AtKey tag $ maybe MissingValue UnexpectedValue (Obj.lookup tag obj)
+
+  noMatchErr _ =
+    Left $ maybe
+      ( TypeMismatch
+          $ "No match for sum cases in nested keys: "
+              <> joinWith ", " ((\k → "`" <> k <> "`") <$> Obj.keys obj)
+      )
+      getTagErr mbTag
+
 sum ∷ ∀ r rep a. Generic a rep ⇒ GCases r rep ⇒ String → Record r → JsonCodec a
 sum = sumWith defaultEncoding
 
@@ -135,43 +149,51 @@ sumWith ∷ ∀ r rep a. GCases r rep ⇒ Generic a rep ⇒ Encoding → String 
 sumWith encoding name r =
   dimap from to $ codec' decode encode
   where
-  decode = gCasesDecode encoding r >>> (lmap $ Named name)
+  mbTag = case encoding of
+    EncodeTagged { tagKey } → Just tagKey
+    EncodeNested _ → Nothing
+
+  decodeObj obj = gCasesDecode encoding r obj # mapError mbTag obj
+  decode = CA.decode jobject >>> either Left decodeObj >>> (lmap $ Named name)
   encode = gCasesEncode encoding r
 
 --------------------------------------------------------------------------------
+
+type GCasesEncode r rep = Encoding → Record r → rep → Json
+type GCasesDecode r rep = Encoding → Record r → Object Json → Either JsonDecodeError (Maybe rep)
 
 class GCases ∷ Row Type → Type → Constraint
 class
   GCases r rep
   where
-  gCasesEncode ∷ Encoding → Record r → rep → Json
-  gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError rep
+  gCasesEncode ∷ GCasesEncode r rep
+  gCasesDecode ∷ GCasesDecode r rep
 
 instance gCasesConstructorNoArgs ∷
   ( Row.Cons name Unit () r
   , IsSymbol name
   ) ⇒
   GCases r (Constructor name NoArguments) where
-  gCasesEncode ∷ Encoding → Record r → Constructor name NoArguments → Json
+  gCasesEncode ∷ GCasesEncode r (Constructor name NoArguments)
   gCasesEncode encoding _ _ =
     let
       name = reflectSymbol @name Proxy ∷ String
     in
       encodeSumCase encoding name []
 
-  gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name NoArguments)
+  gCasesDecode ∷ GCasesDecode r (Constructor name NoArguments)
   gCasesDecode encoding _ json = do
     let name = reflectSymbol @name Proxy ∷ String
-
-    parseNoFields encoding json name
-    pure $ Constructor NoArguments
+    lmap (Named ("case " <> name)) do
+      parsed ← parseNoFields encoding json name
+      pure $ parsed <#> const (Constructor NoArguments)
 
 else instance gCasesConstructorSingleArg ∷
   ( Row.Cons name (JsonCodec a) () r
   , IsSymbol name
   ) ⇒
   GCases r (Constructor name (Argument a)) where
-  gCasesEncode ∷ Encoding → Record r → Constructor name (Argument a) → Json
+  gCasesEncode ∷ GCasesEncode r (Constructor name (Argument a))
   gCasesEncode encoding r (Constructor (Argument x)) =
     let
       codec = Record.get (Proxy @name) r ∷ JsonCodec a
@@ -179,14 +201,16 @@ else instance gCasesConstructorSingleArg ∷
     in
       encodeSumCase encoding name [ CA.encode codec x ]
 
-  gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name (Argument a))
-  gCasesDecode encoding r json = do
+  gCasesDecode ∷ GCasesDecode r (Constructor name (Argument a))
+  gCasesDecode encoding r obj = do
     let name = reflectSymbol @name Proxy ∷ String
-
-    field ← parseSingleField encoding json name ∷ _ Json
-    let codec = Record.get (Proxy @name) r ∷ JsonCodec a
-    result ← CA.decode codec field ∷ _ a
-    pure $ Constructor (Argument result)
+    lmap (Named ("case " <> name)) do
+      parsed ← parseSingleField encoding obj name
+      flip (maybe (pure Nothing)) parsed
+        \field → do
+          let codec = Record.get (Proxy @name) r ∷ JsonCodec a
+          result ← CA.decode codec field ∷ _ a
+          pure $ Just $ Constructor (Argument result)
 
 else instance gCasesConstructorManyArgs ∷
   ( Row.Cons name codecs () r
@@ -194,7 +218,7 @@ else instance gCasesConstructorManyArgs ∷
   , IsSymbol name
   ) ⇒
   GCases r (Constructor name args) where
-  gCasesEncode ∷ Encoding → Record r → Constructor name args → Json
+  gCasesEncode ∷ GCasesEncode r (Constructor name args)
   gCasesEncode encoding r (Constructor rep) =
     let
       codecs = Record.get (Proxy @name) r ∷ codecs
@@ -203,14 +227,16 @@ else instance gCasesConstructorManyArgs ∷
     in
       encodeSumCase encoding name jsons
 
-  gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Constructor name args)
-  gCasesDecode encoding r json = do
+  gCasesDecode ∷ GCasesDecode r (Constructor name args)
+  gCasesDecode encoding r obj = do
     let name = reflectSymbol @name Proxy ∷ String
-
-    jsons ← parseManyFields encoding json name ∷ _ (Array Json)
-    let codecs = Record.get (Proxy @name) r ∷ codecs
-    result ← gFieldsDecode encoding codecs jsons ∷ _ args
-    pure $ Constructor result
+    lmap (Named ("case " <> name)) do
+      parsed ← parseManyFields encoding obj name
+      flip (maybe (pure Nothing)) parsed
+        \jsons → do
+          let codecs = Record.get (Proxy @name) r ∷ codecs
+          result ← gFieldsDecode encoding codecs jsons 0 ∷ _ args
+          pure $ Just $ Constructor result
 
 instance gCasesSum ∷
   ( GCases r1 (Constructor name lhs)
@@ -222,7 +248,7 @@ instance gCasesSum ∷
   , IsSymbol name
   ) ⇒
   GCases r (Sum (Constructor name lhs) rhs) where
-  gCasesEncode ∷ Encoding → Record r → Sum (Constructor name lhs) rhs → Json
+  gCasesEncode ∷ GCasesEncode r (Sum (Constructor name lhs) rhs)
   gCasesEncode encoding r =
     let
       codec = Record.get (Proxy @name) r ∷ codec
@@ -233,36 +259,39 @@ instance gCasesSum ∷
         Inl lhs → gCasesEncode encoding r1 lhs
         Inr rhs → gCasesEncode encoding r2 rhs
 
-  gCasesDecode ∷ Encoding → Record r → Json → Either JsonDecodeError (Sum (Constructor name lhs) rhs)
+  gCasesDecode ∷ GCasesDecode r (Sum (Constructor name lhs) rhs)
   gCasesDecode encoding r tagged = do
     let
       codec = Record.get (Proxy @name) r ∷ codec
       r1 = Record.insert (Proxy @name) codec {} ∷ Record r1
-      r2 = Record.delete (Proxy @name) r ∷ Record r2
-    let
-      lhs = gCasesDecode encoding r1 tagged ∷ _ (Constructor name lhs)
-      rhs = gCasesDecode encoding r2 tagged ∷ _ rhs
-    (Inl <$> lhs) <|> (Inr <$> rhs)
+      lhs = gCasesDecode encoding r1 tagged ∷ _ (Maybe (Constructor name lhs))
+
+    lhs >>= case _ of
+      Just result →
+        pure (Just $ Inl result)
+      Nothing → do
+        let r2 = Record.delete (Proxy @name) r ∷ Record r2
+        let rhs = gCasesDecode encoding r2 tagged ∷ _ (Maybe rhs)
+        map Inr <$> rhs
 
 --------------------------------------------------------------------------------
 
+type GFieldsEncode codecs rep = Encoding → codecs → rep → Array Json
+type GFieldsDecode codecs rep = Encoding → codecs → Array Json → Int → Either JsonDecodeError rep
+
 class GFields ∷ Type → Type → Constraint
 class GFields codecs rep where
-  gFieldsEncode ∷ Encoding → codecs → rep → Array Json
-  gFieldsDecode ∷ Encoding → codecs → Array Json → Either JsonDecodeError rep
+  gFieldsEncode ∷ GFieldsEncode codecs rep
+  gFieldsDecode ∷ GFieldsDecode codecs rep
 
 instance gFieldsArgument ∷ GFields (JsonCodec a) (Argument a) where
-  gFieldsEncode ∷ Encoding → JsonCodec a → Argument a → Array Json
+  gFieldsEncode ∷ GFieldsEncode (JsonCodec a) (Argument a)
   gFieldsEncode _ codec (Argument val) = [ CA.encode codec val ]
 
-  gFieldsDecode ∷ Encoding → JsonCodec a → Array Json → Either JsonDecodeError (Argument a)
-  gFieldsDecode _ codec jsons = do
-    json ←
-      ( case jsons of
-          [ head ] → pure head
-          _ → Left $ TypeMismatch "Expecting exactly one element"
-      ) ∷ _ Json
-    res ← CA.decode codec json ∷ _ a
+  gFieldsDecode ∷ GFieldsDecode (JsonCodec a) (Argument a)
+  gFieldsDecode _ codec jsons idx = do
+    json ← expectOneElement jsons
+    res ← lmap (AtIndex idx) $ CA.decode codec json ∷ _ a
     pure $ Argument res
 
 instance gFieldsProduct ∷
@@ -270,7 +299,7 @@ instance gFieldsProduct ∷
   , GFields codecs reps
   ) ⇒
   GFields (codec /\ codecs) (Product rep reps) where
-  gFieldsEncode ∷ Encoding → (codec /\ codecs) → Product rep reps → Array Json
+  gFieldsEncode ∷ GFieldsEncode (codec /\ codecs) (Product rep reps)
   gFieldsEncode encoding (codec /\ codecs) (Product rep reps) =
     let
       r1 = gFieldsEncode encoding codec rep ∷ Array Json
@@ -278,102 +307,81 @@ instance gFieldsProduct ∷
     in
       r1 <> r2
 
-  gFieldsDecode ∷ Encoding → (codec /\ codecs) → Array Json → Either JsonDecodeError (Product rep reps)
-  gFieldsDecode encoding (codec /\ codecs) jsons = do
+  gFieldsDecode ∷ GFieldsDecode (codec /\ codecs) (Product rep reps)
+  gFieldsDecode encoding (codec /\ codecs) jsons idx = do
     { head, tail } ←
       (Array.uncons jsons # note (TypeMismatch "Expecting at least one element"))
         ∷ _ { head ∷ Json, tail ∷ Array Json }
-    rep ← gFieldsDecode encoding codec [ head ] ∷ _ rep
-    reps ← gFieldsDecode encoding codecs tail ∷ _ reps
+    rep ← gFieldsDecode encoding codec [ head ] idx ∷ _ rep
+    reps ← gFieldsDecode encoding codecs tail (idx + 1) ∷ _ reps
     pure $ Product rep reps
 
 --------------------------------------------------------------------------------
 
-checkTag ∷ String → Object Json → String → Either JsonDecodeError Unit
-checkTag tagKey obj expectedTag = do
-  val ←
-    ( Obj.lookup tagKey obj
-        # note (TypeMismatch ("Expecting a tag property `" <> tagKey <> "`"))
-    ) ∷ _ Json
-  tag ← CA.decode CA.string val ∷ _ String
-  unless (tag == expectedTag)
-    $ Left
-    $ TypeMismatch ("Expecting tag `" <> expectedTag <> "`, got `" <> tag <> "`")
+type ParseFields a = Encoding → Object Json → String → Either JsonDecodeError (Maybe a)
 
-parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
-parseNoFields encoding json expectedTag =
+ifTagOk ∷ ∀ a. String → Object Json → String → Either JsonDecodeError a → Either JsonDecodeError (Maybe a)
+ifTagOk tagKey obj expectedTag act =
+  case Obj.lookup tagKey obj <#> CA.decode CA.string of
+    Just (Right tag) | tag == expectedTag → map Just act
+    _ → pure Nothing
+
+ifNestedOk ∷ ∀ a. Object Json → String → (Json → Either JsonDecodeError a) → Either JsonDecodeError (Maybe a)
+ifNestedOk obj expectedTag act =
+  maybe (pure Nothing) (map Just <<< act) (Obj.lookup expectedTag obj)
+
+getValue ∷ String → Object Json → Either JsonDecodeError Json
+getValue valuesKey obj =
+  Obj.lookup valuesKey obj
+    # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
+
+expectOneElement ∷ ∀ a. Array a → Either JsonDecodeError a
+expectOneElement =
+  case _ of
+    [ head ] → pure head
+    _ → Left $ TypeMismatch "Expecting exactly one element"
+
+parseNoFields ∷ ParseFields Unit
+parseNoFields encoding obj expectedTag =
   case encoding of
     EncodeNested {} → do
-      obj ← CA.decode jobject json
-      val ←
-        ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
-        ) ∷ _ Json
-      fields ← CA.decode CA.jarray val ∷ _ (Array Json)
-      when (fields /= [])
-        $ Left
-        $ TypeMismatch "Expecting an empty array"
+      ifNestedOk obj expectedTag expectEmpty
 
     EncodeTagged { tagKey, valuesKey, omitEmptyArguments } → do
-      obj ← CA.decode jobject json
-      checkTag tagKey obj expectedTag
-      when (not omitEmptyArguments) do
-        val ←
-          ( Obj.lookup valuesKey obj
-              # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
-          ) ∷ _ Json
-        fields ← CA.decode CA.jarray val ∷ _ (Array Json)
-        when (fields /= [])
-          $ Left
-          $ TypeMismatch "Expecting an empty array"
+      ifTagOk tagKey obj expectedTag do
+        when (not omitEmptyArguments) do
+          getValue valuesKey obj >>= expectEmpty
+  where
+  expectEmpty val = do
+    fields ← CA.decode CA.jarray val ∷ _ (Array Json)
+    when (fields /= []) do
+      Left $ TypeMismatch "Expecting an empty array"
 
-parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
-parseSingleField encoding json expectedTag = case encoding of
+parseSingleField ∷ ParseFields Json
+parseSingleField encoding obj expectedTag = case encoding of
   EncodeNested { unwrapSingleArguments } → do
-    obj ← CA.decode jobject json
-    val ←
-      ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
-      ) ∷ _ Json
-    if unwrapSingleArguments then
-      pure val
-    else do
-      fields ← CA.decode CA.jarray val
-      case fields of
-        [ head ] → pure head
-        _ → Left $ TypeMismatch "Expecting exactly one element"
+    ifNestedOk obj expectedTag (handleVal unwrapSingleArguments)
 
   EncodeTagged { tagKey, valuesKey, unwrapSingleArguments } → do
-    obj ← CA.decode jobject json
-    checkTag tagKey obj expectedTag
-    val ←
-      ( Obj.lookup valuesKey obj
-          # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
-      ) ∷ _ Json
+    ifTagOk tagKey obj expectedTag do
+      getValue valuesKey obj >>= handleVal unwrapSingleArguments
+
+  where
+  handleVal unwrapSingleArguments val =
     if unwrapSingleArguments then
       pure val
-    else do
-      fields ← CA.decode CA.jarray val
-      case fields of
-        [ head ] → pure head
-        _ → Left $ TypeMismatch "Expecting exactly one element"
+    else
+      CA.decode CA.jarray val >>= expectOneElement
 
-parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
-parseManyFields encoding json expectedTag =
+parseManyFields ∷ ParseFields (Array Json)
+parseManyFields encoding obj expectedTag =
   case encoding of
     EncodeNested {} → do
-      obj ← CA.decode jobject json
-      val ←
-        ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
-        ) ∷ _ Json
-      CA.decode CA.jarray val
+      ifNestedOk obj expectedTag (CA.decode CA.jarray)
 
     EncodeTagged { tagKey, valuesKey } → do
-      obj ← CA.decode jobject json
-      checkTag tagKey obj expectedTag
-      val ←
-        ( Obj.lookup valuesKey obj
-            # note (TypeMismatch ("Expecting a value property `" <> valuesKey <> "`"))
-        ) ∷ _ Json
-      CA.decode CA.jarray val
+      ifTagOk tagKey obj expectedTag do
+        getValue valuesKey obj >>= CA.decode CA.jarray
 
 encodeSumCase ∷ Encoding → String → Array Json → Json
 encodeSumCase encoding tag jsons =
@@ -412,19 +420,24 @@ defaultFlatEncoding = { tag: Proxy }
 sumFlat ∷ ∀ r rep a. GFlatCases "tag" r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
 sumFlat = sumFlatWith defaultFlatEncoding
 
-sumFlatWith ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag -> String → Record r → JsonCodec a
+sumFlatWith ∷ ∀ @tag r rep a. IsSymbol tag ⇒ GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag → String → Record r → JsonCodec a
 sumFlatWith _ name r =
-  dimap from to $ codec' dec enc
+  dimap from to $ codec' decode encode
   where
-  dec = gFlatCasesDecode @tag r >>> (lmap $ Named name)
-  enc = gFlatCasesEncode @tag r
+  tag = reflectSymbol (Proxy @tag) ∷ String
+  decodeObj obj = gFlatCasesDecode @tag r obj # mapError (Just tag) obj
+  decode = CA.decode jobject >>> either Left decodeObj >>> (lmap $ Named name)
+  encode = gFlatCasesEncode @tag r
+
+type GFlatCasesEncode r rep = Record r → rep → Json
+type GFlatCasesDecode r rep = Record r → Object Json → Either JsonDecodeError (Maybe rep)
 
 class GFlatCases ∷ Symbol → Row Type → Type → Constraint
 class
   GFlatCases tag r rep
   where
-  gFlatCasesEncode ∷ Record r → rep → Json
-  gFlatCasesDecode ∷ Record r → Json → Either JsonDecodeError rep
+  gFlatCasesEncode ∷ GFlatCasesEncode r rep
+  gFlatCasesDecode ∷ GFlatCasesDecode r rep
 
 instance gFlatCasesConstructorNoArg ∷
   ( Row.Cons name Unit () rc
@@ -433,7 +446,7 @@ instance gFlatCasesConstructorNoArg ∷
   , IsSymbol tag
   ) ⇒
   GFlatCases tag rc (Constructor name NoArguments) where
-  gFlatCasesEncode ∷ Record rc → Constructor name NoArguments → Json
+  gFlatCasesEncode ∷ GFlatCasesEncode rc (Constructor name NoArguments)
   gFlatCasesEncode _ (Constructor NoArguments) =
     let
       name = reflectSymbol (Proxy @name) ∷ String
@@ -444,22 +457,13 @@ instance gFlatCasesConstructorNoArg ∷
     in
       CA.encode codecWithTag rcWithTag
 
-  gFlatCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name NoArguments)
-  gFlatCasesDecode _ json = do
-    let
-      name = reflectSymbol (Proxy @name) ∷ String
+  gFlatCasesDecode ∷ GFlatCasesDecode rc (Constructor name NoArguments)
+  gFlatCasesDecode _ obj = do
+    let name = reflectSymbol (Proxy @name)
+    let tagKey = reflectSymbol (Proxy @tag)
 
-      propCodec = CAR.record {} ∷ JPropCodec {}
-      propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf)
-      codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf)
-    r ← CA.decode codecWithTag json ∷ _ (Record rf)
-    let actualTag = Record.get (Proxy @tag) r ∷ String
-
-    when (actualTag /= name)
-      $ Left
-      $ TypeMismatch ("Expecting tag `" <> name <> "`, got `" <> actualTag <> "`")
-
-    pure (Constructor NoArguments)
+    lmap (Named ("case " <> name)) $ ifTagOk tagKey obj name do
+      pure $ Constructor NoArguments
 
 instance gFlatCasesConstructorSingleArg ∷
   ( Row.Cons name (JPropCodec (Record rf)) () rc
@@ -469,7 +473,7 @@ instance gFlatCasesConstructorSingleArg ∷
   , IsSymbol tag
   ) ⇒
   GFlatCases tag rc (Constructor name (Argument (Record rf))) where
-  gFlatCasesEncode ∷ Record rc → Constructor name (Argument (Record rf)) → Json
+  gFlatCasesEncode ∷ GFlatCasesEncode rc (Constructor name (Argument (Record rf)))
   gFlatCasesEncode rc (Constructor (Argument rf)) =
     let
       name = reflectSymbol (Proxy @name) ∷ String
@@ -480,22 +484,15 @@ instance gFlatCasesConstructorSingleArg ∷
     in
       CA.encode codecWithTag rcWithTag
 
-  gFlatCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name (Argument (Record rf)))
-  gFlatCasesDecode rc json = do
-    let
-      name = reflectSymbol (Proxy @name) ∷ String
-      propCodec = Record.get (Proxy @name) rc ∷ JPropCodec (Record rf)
-      propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf')
-      codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf')
-    r ← CA.decode codecWithTag json ∷ _ (Record rf')
+  gFlatCasesDecode ∷ GFlatCasesDecode rc (Constructor name (Argument (Record rf)))
+  gFlatCasesDecode rc obj = do
+    let name = reflectSymbol (Proxy @name)
+    let tagKey = reflectSymbol (Proxy @tag)
 
-    let actualTag = Record.get (Proxy @tag) r ∷ String
-    when (actualTag /= name)
-      $ Left
-      $ TypeMismatch ("Expecting tag `" <> name <> "`, got `" <> actualTag <> "`")
-
-    let r' = Record.delete (Proxy @tag) r ∷ Record rf
-    pure (Constructor (Argument r'))
+    lmap (Named ("case " <> name)) $ ifTagOk tagKey obj name do
+      let propCodec = Record.get (Proxy @name) rc ∷ JPropCodec (Record rf)
+      r ← CA.decode propCodec obj
+      pure $ (Constructor (Argument r))
 
 instance gFlatCasesSum ∷
   ( GFlatCases tag r1 (Constructor name lhs)
@@ -507,7 +504,7 @@ instance gFlatCasesSum ∷
   , IsSymbol name
   ) ⇒
   GFlatCases tag r (Sum (Constructor name lhs) rhs) where
-  gFlatCasesEncode ∷ Record r → Sum (Constructor name lhs) rhs → Json
+  gFlatCasesEncode ∷ GFlatCasesEncode r (Sum (Constructor name lhs) rhs)
   gFlatCasesEncode r =
     let
       codec = Record.get (Proxy @name) r ∷ codec
@@ -518,19 +515,22 @@ instance gFlatCasesSum ∷
         Inl lhs → gFlatCasesEncode @tag r1 lhs
         Inr rhs → gFlatCasesEncode @tag r2 rhs
 
-  gFlatCasesDecode ∷ Record r → Json → Either JsonDecodeError (Sum (Constructor name lhs) rhs)
+  gFlatCasesDecode ∷ GFlatCasesDecode r (Sum (Constructor name lhs) rhs)
   gFlatCasesDecode r tagged = do
     let
       codec = Record.get (Proxy @name) r ∷ codec
       r1 = Record.insert (Proxy @name) codec {} ∷ Record r1
-      r2 = Record.delete (Proxy @name) r ∷ Record r2
-    let
-      lhs = gFlatCasesDecode @tag r1 tagged ∷ _ (Constructor name lhs)
-      rhs = gFlatCasesDecode @tag r2 tagged ∷ _ rhs
-    (Inl <$> lhs) <|> (Inr <$> rhs)
+      lhs = gFlatCasesDecode @tag r1 tagged ∷ _ (Maybe (Constructor name lhs))
+
+    lhs >>= case _ of
+      Just result →
+        pure (Just $ Inl result)
+      Nothing → do
+        let r2 = Record.delete (Proxy @name) r ∷ Record r2
+        let rhs = gFlatCasesDecode @tag r2 tagged ∷ _ (Maybe rhs)
+        map Inr <$> rhs
 
 -- | Same as `Record.delete` but deleting only happens at the type level
 -- | and the value is left untouched.
 unsafeDelete ∷ ∀ r1 r2 l a. IsSymbol l ⇒ Row.Lacks l r1 ⇒ Row.Cons l a r1 r2 ⇒ Proxy l → Record r2 → Record r1
 unsafeDelete _ r = unsafeCoerce r
-
