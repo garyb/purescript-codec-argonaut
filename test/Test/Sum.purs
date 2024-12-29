@@ -3,14 +3,15 @@ module Test.Sum where
 import Prelude
 
 import Control.Monad.Error.Class (liftEither)
-import Data.Argonaut.Core (stringifyWithIndent)
+import Data.Argonaut.Core (fromString, stringifyWithIndent)
 import Data.Argonaut.Decode (parseJson)
 import Data.Bifunctor (lmap)
 import Data.Codec (decode, encode)
-import Data.Codec.Argonaut (JsonCodec)
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..))
 import Data.Codec.Argonaut as C
 import Data.Codec.Argonaut.Record as CR
-import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlat, sumFlatWith, sumWith)
+import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlatWith, sumWith)
+import Data.Either (Either(..), either)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -22,7 +23,6 @@ import Test.QuickCheck (class Arbitrary, arbitrary, quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
 import Test.Util (propCodec)
 import Type.Prelude (Proxy(..))
-import Type.Proxy (Proxy)
 
 --------------------------------------------------------------------------------
 
@@ -96,12 +96,46 @@ check codec val expectEncoded = do
   when (decoded /= val) $
     throw ("check failed, expected: " <> show val <> ", got: " <> show decoded)
 
+checkError ∷ ∀ a. Show a ⇒ JsonCodec a → JsonDecodeError → String → Effect Unit
+checkError codec expectError encodedStr = do
+
+  json ← liftEither $ lmap (show >>> error) $ parseJson encodedStr
+
+  decoded ← liftEither $ lmap (show >>> error) $ either Right Left $ decode codec json
+
+  when (decoded /= expectError) $
+    throw ("decode error check failed, expected: " <> show expectError <> ", got: " <> show decoded)
+
 main ∷ Effect Unit
 main = do
   log "Check sum"
 
   log "  - Default encoding"
+  let
+    noMathErr keys =
+      Named "Sample" (TypeMismatch $ "No match for sum cases in nested keys: " <> keys)
   do
+    checkError (codecSample defaultEncoding)
+      (Named "Sample" (TypeMismatch "Object"))
+      $ Str.joinWith "\n"
+          [ "42"
+          ]
+
+    checkError (codecSample defaultEncoding)
+      (Named "Sample" (AtKey "tag" (UnexpectedValue $ fromString "Zoo")))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Zoo\""
+          , "}"
+          ]
+
+    checkError (codecSample defaultEncoding)
+      (Named "Sample" (AtKey "tag" MissingValue))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"type\": \"Boo\""
+          , "}"
+          ]
 
     -- Encode/Decode constructor without arguments
     check (codecSample defaultEncoding) Foo
@@ -112,6 +146,14 @@ main = do
           , "}"
           ]
 
+    checkError (codecSample defaultEncoding)
+      (Named "Sample" (Named "case Foo" (TypeMismatch "Expecting a value property `values`")))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Foo\""
+          , "}"
+          ]
+
     -- Encode/Decode constructor with single argument
     check (codecSample defaultEncoding) (Bar 42)
       $ Str.joinWith "\n"
@@ -119,6 +161,16 @@ main = do
           , "  \"tag\": \"Bar\","
           , "  \"values\": ["
           , "    42"
+          , "  ]"
+          , "}"
+          ]
+
+    checkError (codecSample defaultEncoding)
+      (Named "Sample" (Named "case Bar" (TypeMismatch "Expecting exactly one element")))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"Bar\","
+          , "  \"values\": ["
           , "  ]"
           , "}"
           ]
@@ -259,6 +311,18 @@ main = do
             , "}"
             ]
 
+      checkError
+        (codecSample opts)
+        (Named "Sample" (Named "case Bar" (TypeMismatch "Int")))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Bar\","
+            , "  \"values\": \"42\""
+            --, "  \"values\": 42"
+            , "}"
+            ]
+      --pure unit
+
       check
         (codecSample opts)
         (Baz true "hello" 42)
@@ -273,6 +337,20 @@ main = do
             , "}"
             ]
 
+      checkError
+        (codecSample opts)
+        (Named "Sample" (Named "case Baz" (AtIndex 2 (TypeMismatch "Int"))))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"Baz\","
+            , "  \"values\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    \"42\""
+            , "  ]"
+            , "}"
+            ]
+
   log "  - EncodeNested"
   do
     log "    - default"
@@ -282,12 +360,30 @@ main = do
           { unwrapSingleArguments: false
           }
 
+      checkError
+        (codecSample opts)
+        (noMathErr "`Zoo`")
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Zoo\": [42]"
+            , "}"
+            ]
+
       check
         (codecSample opts)
         Foo
         $ Str.joinWith "\n"
             [ "{"
             , "  \"Foo\": []"
+            , "}"
+            ]
+
+      checkError
+        (codecSample opts)
+        (Named "Sample" (Named "case Foo" (TypeMismatch "Expecting an empty array")))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Foo\": [42]"
             , "}"
             ]
 
@@ -302,41 +398,14 @@ main = do
             , "}"
             ]
 
-      check
+      checkError
         (codecSample opts)
-        (Baz true "hello" 42)
+        (Named "Sample" (Named "case Bar" (TypeMismatch "Int")))
         $ Str.joinWith "\n"
             [ "{"
-            , "  \"Baz\": ["
-            , "    true,"
-            , "    \"hello\","
-            , "    42"
+            , "  \"Bar\": ["
+            , "    \"42\""
             , "  ]"
-            , "}"
-            ]
-
-    log "    - Option: Unwrap single arguments"
-    do
-      let
-        opts = EncodeNested
-          { unwrapSingleArguments: true
-          }
-
-      check
-        (codecSample opts)
-        Foo
-        $ Str.joinWith "\n"
-            [ "{"
-            , "  \"Foo\": []"
-            , "}"
-            ]
-
-      check
-        (codecSample opts)
-        (Bar 42)
-        $ Str.joinWith "\n"
-            [ "{"
-            , "  \"Bar\": 42"
             , "}"
             ]
 
@@ -352,11 +421,65 @@ main = do
             , "  ]"
             , "}"
             ]
+
+  log "    - Option: Unwrap single arguments"
+  do
+    let
+      opts = EncodeNested
+        { unwrapSingleArguments: true
+        }
+
+    check
+      (codecSample opts)
+      Foo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"Foo\": []"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Bar 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"Bar\": 42"
+          , "}"
+          ]
+
+    check
+      (codecSample opts)
+      (Baz true "hello" 42)
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"Baz\": ["
+          , "    true,"
+          , "    \"hello\","
+          , "    42"
+          , "  ]"
+          , "}"
+          ]
 
   quickCheck (propCodec arbitrary (codecSample defaultEncoding))
 
   log "Check sum flat"
   do
+    checkError codecSampleFlat
+      (Named "Sample" (AtKey "tag" MissingValue))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"x\": \"FlatFoo\""
+          , "}"
+          ]
+
+    checkError codecSampleFlat
+      (Named "Sample" (AtKey "tag" (UnexpectedValue $ fromString "FlatZoo")))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatZoo\""
+          , "}"
+          ]
+
     check codecSampleFlat FlatFoo
       $ Str.joinWith "\n"
           [ "{"
@@ -369,6 +492,15 @@ main = do
           [ "{"
           , "  \"tag\": \"FlatBar\","
           , "  \"errors\": 42"
+          , "}"
+          ]
+
+    checkError codecSampleFlat
+      (Named "Sample" (Named "case FlatBar" (AtKey "errors" (TypeMismatch "Int"))))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatBar\","
+          , "  \"errors\": \"42\""
           , "}"
           ]
 
@@ -385,5 +517,17 @@ main = do
           , "}"
           ]
 
-    quickCheck (propCodec arbitrary codecSampleFlat)
+    checkError codecSampleFlat
+      (Named "Sample" (Named "case FlatBaz" (AtKey "pos" (Named "Pos" (AtKey "y" MissingValue)))))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatBaz\","
+          , "  \"active\": true,"
+          , "  \"name\": \"hello\","
+          , "  \"pos\": {"
+          , "    \"x\": 42"
+          , "  }"
+          , "}"
+          ]
 
+    quickCheck (propCodec arbitrary codecSampleFlat)
