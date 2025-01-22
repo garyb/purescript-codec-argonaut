@@ -1,29 +1,29 @@
 module Data.Codec.Argonaut.Sum
-  -- ( Encoding(..)
-  -- , FlatEncoding
-  -- , class GCases
-  -- , class GFields
-  -- , class GFlatCases
-  -- , defaultEncoding
-  -- , defaultFlatEncoding
-  -- , enumSum
-  -- , gCasesDecode
-  -- , gCasesEncode
-  -- , gFieldsDecode
-  -- , gFieldsEncode
-  -- , gFlatCasesDecode
-  -- , gFlatCasesEncode
-  -- , sum
-  -- , sumFlat
-  -- , sumFlatWith
-  -- , sumWith
-  -- , taggedSum
-  -- )
+  ( Encoding(..)
+  , FlatEncoding
+  , Err
+  , class GCases
+  , class GFields
+  , class GFlatCases
+  , defaultEncoding
+  , defaultFlatEncoding
+  , enumSum
+  , gCasesDecode
+  , gCasesEncode
+  , gFieldsDecode
+  , gFieldsEncode
+  , gFlatCasesDecode
+  , gFlatCasesEncode
+  , sum
+  , sumFlat
+  , sumFlatWith
+  , sumWith
+  , taggedSum
+  )
   where
 
 import Prelude
 
-import Control.Alt ((<|>))
 import Data.Argonaut.Core (Json)
 import Data.Argonaut.Core (Json, fromString) as J
 import Data.Array (catMaybes)
@@ -36,7 +36,6 @@ import Data.Codec.Argonaut as CA
 import Data.Codec.Argonaut.Record as CAR
 import Data.Either (Either(..), note)
 import Data.Generic.Rep (class Generic, Argument(..), Constructor(..), NoArguments(..), Product(..), Sum(..), from, to)
-import Data.Int (Parity)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Profunctor (dimap)
 import Data.Symbol (class IsSymbol, reflectSymbol)
@@ -144,7 +143,7 @@ finalizeError name err =
   Named name $
     case err of
       NoCase → TypeMismatch "No case matched"
-      JErr err → err
+      JErr jerr → jerr
 
 data Err = NoCase | JErr JsonDecodeError
 
