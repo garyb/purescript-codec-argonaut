@@ -319,7 +319,7 @@ parseNoFields encoding json expectedTag =
     EncodeNested {} → do
       obj ← lmap JErr $ CA.decode jobject json
       val ←
-        ( Obj.lookup expectedTag obj # note (JErr $ TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+        ( Obj.lookup expectedTag obj # note NoCase
         ) ∷ _ Json
       fields ← lmap JErr $ CA.decode CA.jarray val ∷ _ (Array Json)
       when (fields /= [])
@@ -346,7 +346,7 @@ parseSingleField encoding json expectedTag = case encoding of
   EncodeNested { unwrapSingleArguments } → do
     obj ← lmap JErr $ CA.decode jobject json
     val ←
-      ( Obj.lookup expectedTag obj # note (JErr $ TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+      ( Obj.lookup expectedTag obj # note NoCase
       ) ∷ _ Json
     if unwrapSingleArguments then
       pure val
@@ -472,8 +472,7 @@ instance gFlatCasesConstructorNoArg ∷
     let actualTag = Record.get (Proxy @tag) r ∷ String
 
     when (actualTag /= name)
-      $ Left
-          (JErr $ TypeMismatch ("Expecting tag `" <> name <> "`, got `" <> actualTag <> "`"))
+      $ Left NoCase
 
     pure (Constructor NoArguments)
 
@@ -507,8 +506,7 @@ instance gFlatCasesConstructorSingleArg ∷
 
     let actualTag = Record.get (Proxy @tag) r ∷ String
     when (actualTag /= name)
-      $ Left
-          (JErr $ TypeMismatch ("Expecting tag `" <> name <> "`, got `" <> actualTag <> "`"))
+      $ Left NoCase
 
     let r' = Record.delete (Proxy @tag) r ∷ Record rf
     pure (Constructor (Argument r'))

@@ -3,7 +3,7 @@ module Test.Sum where
 import Prelude
 
 import Control.Monad.Error.Class (liftEither)
-import Data.Argonaut.Core (stringifyWithIndent)
+import Data.Argonaut.Core (stringify, stringifyWithIndent)
 import Data.Argonaut.Decode (parseJson)
 import Data.Bifunctor (lmap)
 import Data.Codec (decode, encode)
@@ -87,14 +87,14 @@ check ∷ ∀ a. Show a ⇒ Eq a ⇒ JsonCodec a → a → String → Effect Uni
 check codec val expectEncoded = do
   let encodedStr = stringifyWithIndent 2 $ encode codec val
   when (encodedStr /= expectEncoded) $
-    throw ("check failed, expected: " <> expectEncoded <> ", got: " <> encodedStr)
+    throw ("encode check failed, expected: " <> expectEncoded <> ", got: " <> encodedStr)
 
   json ← liftEither $ lmap (show >>> error) $ parseJson encodedStr
 
-  decoded ← liftEither $ lmap (show >>> error) $ decode codec json
+  decoded ← liftEither $ lmap (\err -> error ("decode failed: " <> show err <> " JSON was: " <> stringify json)) $ decode codec json
 
   when (decoded /= val) $
-    throw ("check failed, expected: " <> show val <> ", got: " <> show decoded)
+    throw ("decode check failed, expected: " <> show val <> ", got: " <> show decoded)
 
 main ∷ Effect Unit
 main = do
