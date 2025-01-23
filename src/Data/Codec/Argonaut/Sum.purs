@@ -19,8 +19,7 @@ module Data.Codec.Argonaut.Sum
   , sumFlatWith
   , sumWith
   , taggedSum
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -310,8 +309,7 @@ checkTag tagKey obj expectedTag = do
     ) ∷ _ Json
   tag ← CA.decode CA.string val # lmap JErr ∷ _ String
   when (tag /= expectedTag)
-    $ Left
-    $ NoCase
+    (Left NoCase)
 
 parseNoFields ∷ Encoding → Json → String → Either Err Unit
 parseNoFields encoding json expectedTag =
@@ -377,8 +375,7 @@ parseManyFields encoding json expectedTag =
     EncodeNested {} → do
       obj ← lmap JErr $ CA.decode jobject json
       val ←
-        ( Obj.lookup expectedTag obj
-            # note (JErr $ TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
+        ( Obj.lookup expectedTag obj # note NoCase
         ) ∷ _ Json
       lmap JErr $ CA.decode CA.jarray val
 
@@ -464,15 +461,11 @@ instance gFlatCasesConstructorNoArg ∷
   gFlatCasesDecode _ json = do
     let
       name = reflectSymbol (Proxy @name) ∷ String
+      tag = reflectSymbol (Proxy @tag) ∷ String
 
-      propCodec = CAR.record {} ∷ JPropCodec {}
-      propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf)
-      codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf)
-    r ← lmap JErr $ CA.decode codecWithTag json ∷ _ (Record rf)
-    let actualTag = Record.get (Proxy @tag) r ∷ String
+    obj ← lmap JErr $ CA.decode jobject json
 
-    when (actualTag /= name)
-      $ Left NoCase
+    checkTag tag obj name
 
     pure (Constructor NoArguments)
 
@@ -499,17 +492,19 @@ instance gFlatCasesConstructorSingleArg ∷
   gFlatCasesDecode rc json = do
     let
       name = reflectSymbol (Proxy @name) ∷ String
+      tag = reflectSymbol (Proxy @tag) ∷ String
+
+    obj ← lmap JErr $ CA.decode jobject json
+
+    checkTag tag obj name
+
+    let
       propCodec = Record.get (Proxy @name) rc ∷ JPropCodec (Record rf)
-      propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf')
-      codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf')
-    r ← lmap JErr $ CA.decode codecWithTag json ∷ _ (Record rf')
+      codec = CA.object ("case " <> name) propCodec ∷ JsonCodec (Record rf)
 
-    let actualTag = Record.get (Proxy @tag) r ∷ String
-    when (actualTag /= name)
-      $ Left NoCase
+    r ← lmap JErr $ CA.decode codec json ∷ _ (Record rf)
 
-    let r' = Record.delete (Proxy @tag) r ∷ Record rf
-    pure (Constructor (Argument r'))
+    pure (Constructor (Argument r))
 
 instance gFlatCasesSum ∷
   ( GFlatCases tag r1 (Constructor name lhs)
