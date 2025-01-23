@@ -141,10 +141,10 @@ finalizeError ∷ String → Err → JsonDecodeError
 finalizeError name err =
   Named name $
     case err of
-      NoCase → TypeMismatch "No case matched"
+      UnmatchedCase → TypeMismatch "No case matched"
       JErr jerr → jerr
 
-data Err = NoCase | JErr JsonDecodeError
+data Err = UnmatchedCase | JErr JsonDecodeError
 
 --------------------------------------------------------------------------------
 
@@ -251,7 +251,7 @@ instance gCasesSum ∷
       lhs _ = gCasesDecode encoding r1 tagged ∷ _ (Constructor name lhs)
       rhs _ = gCasesDecode encoding r2 tagged ∷ _ rhs
     case lhs unit of
-      Left NoCase → Inr <$> (rhs unit)
+      Left UnmatchedCase → Inr <$> (rhs unit)
       Left (JErr err) → Left (JErr err)
       Right val → Right (Inl val)
 
@@ -309,7 +309,7 @@ checkTag tagKey obj expectedTag = do
     ) ∷ _ Json
   tag ← CA.decode CA.string val # lmap JErr ∷ _ String
   when (tag /= expectedTag)
-    (Left NoCase)
+    (Left UnmatchedCase)
 
 parseNoFields ∷ Encoding → Json → String → Either Err Unit
 parseNoFields encoding json expectedTag =
@@ -317,7 +317,7 @@ parseNoFields encoding json expectedTag =
     EncodeNested {} → do
       obj ← lmap JErr $ CA.decode jobject json
       val ←
-        ( Obj.lookup expectedTag obj # note NoCase
+        ( Obj.lookup expectedTag obj # note UnmatchedCase
         ) ∷ _ Json
       fields ← lmap JErr $ CA.decode CA.jarray val ∷ _ (Array Json)
       when (fields /= [])
@@ -344,7 +344,7 @@ parseSingleField encoding json expectedTag = case encoding of
   EncodeNested { unwrapSingleArguments } → do
     obj ← lmap JErr $ CA.decode jobject json
     val ←
-      ( Obj.lookup expectedTag obj # note NoCase
+      ( Obj.lookup expectedTag obj # note UnmatchedCase
       ) ∷ _ Json
     if unwrapSingleArguments then
       pure val
@@ -375,7 +375,7 @@ parseManyFields encoding json expectedTag =
     EncodeNested {} → do
       obj ← lmap JErr $ CA.decode jobject json
       val ←
-        ( Obj.lookup expectedTag obj # note NoCase
+        ( Obj.lookup expectedTag obj # note UnmatchedCase
         ) ∷ _ Json
       lmap JErr $ CA.decode CA.jarray val
 
@@ -537,7 +537,7 @@ instance gFlatCasesSum ∷
       lhs _ = gFlatCasesDecode @tag r1 tagged ∷ _ (Constructor name lhs)
       rhs _ = gFlatCasesDecode @tag r2 tagged ∷ _ rhs
     case lhs unit of
-      Left NoCase → Inr <$> rhs unit
+      Left UnmatchedCase → Inr <$> rhs unit
       Left (JErr err) → Left (JErr err)
       Right val → Right (Inl val)
 
