@@ -18,8 +18,7 @@ module Data.Codec.Argonaut.Sum
   , sumFlatWith
   , sumWith
   , taggedSum
-  )
-  where
+  ) where
 
 import Prelude
 
@@ -110,12 +109,15 @@ taggedSum name printTag parseTag f g = Codec.codec decodeCase encodeCase
 
 data Encoding
   = EncodeNested
-      { unwrapSingleArguments ∷ Boolean }
+      { unwrapSingleArguments ∷ Boolean
+      , mapTag ∷ String → String
+      }
   | EncodeTagged
       { tagKey ∷ String
       , valuesKey ∷ String
       , omitEmptyArguments ∷ Boolean
       , unwrapSingleArguments ∷ Boolean
+      , mapTag ∷ String → String
       }
 
 defaultEncoding ∷ Encoding
@@ -124,6 +126,7 @@ defaultEncoding = EncodeTagged
   , valuesKey: "values"
   , unwrapSingleArguments: false
   , omitEmptyArguments: false
+  , mapTag: identity
   }
 
 --------------------------------------------------------------------------------
@@ -301,9 +304,10 @@ checkTag tagKey obj expectedTag = do
     $ TypeMismatch ("Expecting tag `" <> expectedTag <> "`, got `" <> tag <> "`")
 
 parseNoFields ∷ Encoding → Json → String → Either JsonDecodeError Unit
-parseNoFields encoding json expectedTag =
+parseNoFields encoding json expectedTagRaw =
   case encoding of
-    EncodeNested {} → do
+    EncodeNested { mapTag } → do
+      let expectedTag = mapTag expectedTagRaw ∷ String
       obj ← CA.decode jobject json
       val ←
         ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
@@ -313,7 +317,8 @@ parseNoFields encoding json expectedTag =
         $ Left
         $ TypeMismatch "Expecting an empty array"
 
-    EncodeTagged { tagKey, valuesKey, omitEmptyArguments } → do
+    EncodeTagged { tagKey, valuesKey, omitEmptyArguments, mapTag } → do
+      let expectedTag = mapTag expectedTagRaw ∷ String
       obj ← CA.decode jobject json
       checkTag tagKey obj expectedTag
       when (not omitEmptyArguments) do
@@ -327,8 +332,9 @@ parseNoFields encoding json expectedTag =
           $ TypeMismatch "Expecting an empty array"
 
 parseSingleField ∷ Encoding → Json → String → Either JsonDecodeError Json
-parseSingleField encoding json expectedTag = case encoding of
-  EncodeNested { unwrapSingleArguments } → do
+parseSingleField encoding json expectedTagRaw = case encoding of
+  EncodeNested { unwrapSingleArguments, mapTag } → do
+    let expectedTag = mapTag expectedTagRaw ∷ String
     obj ← CA.decode jobject json
     val ←
       ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
@@ -341,7 +347,8 @@ parseSingleField encoding json expectedTag = case encoding of
         [ head ] → pure head
         _ → Left $ TypeMismatch "Expecting exactly one element"
 
-  EncodeTagged { tagKey, valuesKey, unwrapSingleArguments } → do
+  EncodeTagged { tagKey, valuesKey, unwrapSingleArguments, mapTag } → do
+    let expectedTag = mapTag expectedTagRaw ∷ String
     obj ← CA.decode jobject json
     checkTag tagKey obj expectedTag
     val ←
@@ -357,16 +364,18 @@ parseSingleField encoding json expectedTag = case encoding of
         _ → Left $ TypeMismatch "Expecting exactly one element"
 
 parseManyFields ∷ Encoding → Json → String → Either JsonDecodeError (Array Json)
-parseManyFields encoding json expectedTag =
+parseManyFields encoding json expectedTagRaw =
   case encoding of
-    EncodeNested {} → do
+    EncodeNested { mapTag } → do
+      let expectedTag = mapTag expectedTagRaw ∷ String
       obj ← CA.decode jobject json
       val ←
         ( Obj.lookup expectedTag obj # note (TypeMismatch ("Expecting a property `" <> expectedTag <> "`"))
         ) ∷ _ Json
       CA.decode CA.jarray val
 
-    EncodeTagged { tagKey, valuesKey } → do
+    EncodeTagged { tagKey, valuesKey, mapTag } → do
+      let expectedTag = mapTag expectedTagRaw ∷ String
       obj ← CA.decode jobject json
       checkTag tagKey obj expectedTag
       val ←
@@ -376,10 +385,11 @@ parseManyFields encoding json expectedTag =
       CA.decode CA.jarray val
 
 encodeSumCase ∷ Encoding → String → Array Json → Json
-encodeSumCase encoding tag jsons =
+encodeSumCase encoding rawTag jsons =
   case encoding of
-    EncodeNested { unwrapSingleArguments } →
+    EncodeNested { unwrapSingleArguments, mapTag } →
       let
+        tag = mapTag rawTag ∷ String
         val = case jsons of
           [] → CA.encode CA.jarray []
           [ json ] | unwrapSingleArguments → json
@@ -389,8 +399,9 @@ encodeSumCase encoding tag jsons =
           [ tag /\ val
           ]
 
-    EncodeTagged { tagKey, valuesKey, unwrapSingleArguments, omitEmptyArguments } →
+    EncodeTagged { tagKey, valuesKey, unwrapSingleArguments, omitEmptyArguments, mapTag } →
       let
+        tag = mapTag rawTag ∷ String
         tagEntry =
           Just (tagKey /\ CA.encode CA.string tag) ∷ Maybe (String /\ Json)
         valEntry =
@@ -412,7 +423,7 @@ defaultFlatEncoding = { tag: Proxy }
 sumFlat ∷ ∀ r rep a. GFlatCases "tag" r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
 sumFlat = sumFlatWith defaultFlatEncoding
 
-sumFlatWith ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag -> String → Record r → JsonCodec a
+sumFlatWith ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag → String → Record r → JsonCodec a
 sumFlatWith _ name r =
   dimap from to $ codec' dec enc
   where
@@ -528,6 +539,39 @@ instance gFlatCasesSum ∷
       lhs = gFlatCasesDecode @tag r1 tagged ∷ _ (Constructor name lhs)
       rhs = gFlatCasesDecode @tag r2 tagged ∷ _ rhs
     (Inl <$> lhs) <|> (Inr <$> rhs)
+
+--------------------------------------------------------------------------------
+
+sumEnum ∷ ∀ r rep a. GEnumCases r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
+sumEnum = unsafeCoerce 1
+
+class GEnumCases ∷ Row Type → Type → Constraint
+class
+  GEnumCases r rep
+  where
+  gEnumCasesEncode ∷ Record r → rep → Json
+  gEnumCasesDecode ∷ Record r → Json → Either JsonDecodeError rep
+
+instance gEnumCasesConstructorNoArg ∷
+  ( Row.Cons name Unit () rc
+  , IsSymbol name
+  ) ⇒
+  GEnumCases rc (Constructor name NoArguments) where
+  gEnumCasesEncode ∷ Record rc → Constructor name NoArguments → Json
+  gEnumCasesEncode _ _ =
+    let
+      name = reflectSymbol (Proxy @name) ∷ String
+    in
+      encodeSumCase defaultEncoding name []
+
+  gEnumCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name NoArguments)
+  gEnumCasesDecode _ json = do
+    let name = reflectSymbol (Proxy @name) ∷ String
+
+    parseNoFields defaultEncoding json name
+    pure $ Constructor NoArguments
+
+--------------------------------------------------------------------------------
 
 -- | Same as `Record.delete` but deleting only happens at the type level
 -- | and the value is left untouched.
