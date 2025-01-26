@@ -415,27 +415,31 @@ encodeSumCase encoding rawTag jsons =
 
 type FlatEncoding (tag ∷ Symbol) =
   { tag ∷ Proxy tag
+  , mapTag ∷ String → String
   }
 
 defaultFlatEncoding ∷ FlatEncoding "tag"
-defaultFlatEncoding = { tag: Proxy }
+defaultFlatEncoding =
+  { tag: Proxy
+  , mapTag: identity
+  }
 
 sumFlat ∷ ∀ r rep a. GFlatCases "tag" r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
 sumFlat = sumFlatWith defaultFlatEncoding
 
 sumFlatWith ∷ ∀ @tag r rep a. GFlatCases tag r rep ⇒ Generic a rep ⇒ FlatEncoding tag → String → Record r → JsonCodec a
-sumFlatWith _ name r =
+sumFlatWith encoding name r =
   dimap from to $ codec' dec enc
   where
-  dec = gFlatCasesDecode @tag r >>> (lmap $ Named name)
-  enc = gFlatCasesEncode @tag r
+  dec = gFlatCasesDecode @tag encoding r >>> (lmap $ Named name)
+  enc = gFlatCasesEncode @tag encoding r
 
 class GFlatCases ∷ Symbol → Row Type → Type → Constraint
 class
   GFlatCases tag r rep
   where
-  gFlatCasesEncode ∷ Record r → rep → Json
-  gFlatCasesDecode ∷ Record r → Json → Either JsonDecodeError rep
+  gFlatCasesEncode ∷ FlatEncoding tag → Record r → rep → Json
+  gFlatCasesDecode ∷ FlatEncoding tag → Record r → Json → Either JsonDecodeError rep
 
 instance gFlatCasesConstructorNoArg ∷
   ( Row.Cons name Unit () rc
@@ -444,10 +448,11 @@ instance gFlatCasesConstructorNoArg ∷
   , IsSymbol tag
   ) ⇒
   GFlatCases tag rc (Constructor name NoArguments) where
-  gFlatCasesEncode ∷ Record rc → Constructor name NoArguments → Json
-  gFlatCasesEncode _ (Constructor NoArguments) =
+  gFlatCasesEncode ∷ FlatEncoding tag → Record rc → Constructor name NoArguments → Json
+  gFlatCasesEncode { mapTag } _ (Constructor NoArguments) =
     let
-      name = reflectSymbol (Proxy @name) ∷ String
+      nameRaw = reflectSymbol (Proxy @name) ∷ String
+      name = mapTag nameRaw ∷ String
       propCodec = CAR.record {} ∷ JPropCodec {}
       propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf)
       codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf)
@@ -455,11 +460,11 @@ instance gFlatCasesConstructorNoArg ∷
     in
       CA.encode codecWithTag rcWithTag
 
-  gFlatCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name NoArguments)
-  gFlatCasesDecode _ json = do
+  gFlatCasesDecode ∷ FlatEncoding tag → Record rc → Json → Either JsonDecodeError (Constructor name NoArguments)
+  gFlatCasesDecode { mapTag } _ json = do
     let
-      name = reflectSymbol (Proxy @name) ∷ String
-
+      nameRaw = reflectSymbol (Proxy @name) ∷ String
+      name = mapTag nameRaw ∷ String
       propCodec = CAR.record {} ∷ JPropCodec {}
       propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf)
       codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf)
@@ -480,10 +485,11 @@ instance gFlatCasesConstructorSingleArg ∷
   , IsSymbol tag
   ) ⇒
   GFlatCases tag rc (Constructor name (Argument (Record rf))) where
-  gFlatCasesEncode ∷ Record rc → Constructor name (Argument (Record rf)) → Json
-  gFlatCasesEncode rc (Constructor (Argument rf)) =
+  gFlatCasesEncode ∷ FlatEncoding tag → Record rc → Constructor name (Argument (Record rf)) → Json
+  gFlatCasesEncode { mapTag } rc (Constructor (Argument rf)) =
     let
-      name = reflectSymbol (Proxy @name) ∷ String
+      nameRaw = reflectSymbol (Proxy @name) ∷ String
+      name = mapTag nameRaw ∷ String
       propCodec = Record.get (Proxy @name) rc ∷ JPropCodec (Record rf)
       propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf')
       codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf')
@@ -491,10 +497,11 @@ instance gFlatCasesConstructorSingleArg ∷
     in
       CA.encode codecWithTag rcWithTag
 
-  gFlatCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name (Argument (Record rf)))
-  gFlatCasesDecode rc json = do
+  gFlatCasesDecode ∷ FlatEncoding tag → Record rc → Json → Either JsonDecodeError (Constructor name (Argument (Record rf)))
+  gFlatCasesDecode { mapTag } rc json = do
     let
-      name = reflectSymbol (Proxy @name) ∷ String
+      nameRaw = reflectSymbol (Proxy @name) ∷ String
+      name = mapTag nameRaw ∷ String
       propCodec = Record.get (Proxy @name) rc ∷ JPropCodec (Record rf)
       propCodecWithTag = CA.recordProp (Proxy @tag) CA.string propCodec ∷ JPropCodec (Record rf')
       codecWithTag = CA.object ("case " <> name) propCodecWithTag ∷ JsonCodec (Record rf')
@@ -518,58 +525,27 @@ instance gFlatCasesSum ∷
   , IsSymbol name
   ) ⇒
   GFlatCases tag r (Sum (Constructor name lhs) rhs) where
-  gFlatCasesEncode ∷ Record r → Sum (Constructor name lhs) rhs → Json
-  gFlatCasesEncode r =
+  gFlatCasesEncode ∷ FlatEncoding tag → Record r → Sum (Constructor name lhs) rhs → Json
+  gFlatCasesEncode encoding r =
     let
       codec = Record.get (Proxy @name) r ∷ codec
       r1 = Record.insert (Proxy @name) codec {} ∷ Record r1
       r2 = unsafeDelete (Proxy @name) r ∷ Record r2
     in
       case _ of
-        Inl lhs → gFlatCasesEncode @tag r1 lhs
-        Inr rhs → gFlatCasesEncode @tag r2 rhs
+        Inl lhs → gFlatCasesEncode @tag encoding r1 lhs
+        Inr rhs → gFlatCasesEncode @tag encoding r2 rhs
 
-  gFlatCasesDecode ∷ Record r → Json → Either JsonDecodeError (Sum (Constructor name lhs) rhs)
-  gFlatCasesDecode r tagged = do
+  gFlatCasesDecode ∷ FlatEncoding tag → Record r → Json → Either JsonDecodeError (Sum (Constructor name lhs) rhs)
+  gFlatCasesDecode encoding r tagged = do
     let
       codec = Record.get (Proxy @name) r ∷ codec
       r1 = Record.insert (Proxy @name) codec {} ∷ Record r1
       r2 = Record.delete (Proxy @name) r ∷ Record r2
     let
-      lhs = gFlatCasesDecode @tag r1 tagged ∷ _ (Constructor name lhs)
-      rhs = gFlatCasesDecode @tag r2 tagged ∷ _ rhs
+      lhs = gFlatCasesDecode @tag encoding r1 tagged ∷ _ (Constructor name lhs)
+      rhs = gFlatCasesDecode @tag encoding r2 tagged ∷ _ rhs
     (Inl <$> lhs) <|> (Inr <$> rhs)
-
---------------------------------------------------------------------------------
-
-sumEnum ∷ ∀ r rep a. GEnumCases r rep ⇒ Generic a rep ⇒ String → Record r → JsonCodec a
-sumEnum = unsafeCoerce 1
-
-class GEnumCases ∷ Row Type → Type → Constraint
-class
-  GEnumCases r rep
-  where
-  gEnumCasesEncode ∷ Record r → rep → Json
-  gEnumCasesDecode ∷ Record r → Json → Either JsonDecodeError rep
-
-instance gEnumCasesConstructorNoArg ∷
-  ( Row.Cons name Unit () rc
-  , IsSymbol name
-  ) ⇒
-  GEnumCases rc (Constructor name NoArguments) where
-  gEnumCasesEncode ∷ Record rc → Constructor name NoArguments → Json
-  gEnumCasesEncode _ _ =
-    let
-      name = reflectSymbol (Proxy @name) ∷ String
-    in
-      encodeSumCase defaultEncoding name []
-
-  gEnumCasesDecode ∷ Record rc → Json → Either JsonDecodeError (Constructor name NoArguments)
-  gEnumCasesDecode _ json = do
-    let name = reflectSymbol (Proxy @name) ∷ String
-
-    parseNoFields defaultEncoding json name
-    pure $ Constructor NoArguments
 
 --------------------------------------------------------------------------------
 
