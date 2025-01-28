@@ -10,7 +10,7 @@ import Data.Codec (decode, encode)
 import Data.Codec.Argonaut (JsonCodec)
 import Data.Codec.Argonaut as C
 import Data.Codec.Argonaut.Record as CR
-import Data.Codec.Argonaut.Sum (Encoding(..), defaultEncoding, sumFlat, sumFlatWith, sumWith)
+import Data.Codec.Argonaut.Sum (Encoding(..), FlatEncoding, defaultEncoding, sumFlatWith, sumWith)
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -22,7 +22,6 @@ import Test.QuickCheck (class Arbitrary, arbitrary, quickCheck)
 import Test.QuickCheck.Arbitrary (genericArbitrary)
 import Test.Util (propCodec)
 import Type.Prelude (Proxy(..))
-import Type.Proxy (Proxy)
 
 --------------------------------------------------------------------------------
 
@@ -67,8 +66,8 @@ instance Arbitrary SampleFlat where
 instance Show SampleFlat where
   show = genericShow
 
-codecSampleFlat ∷ JsonCodec SampleFlat
-codecSampleFlat = sumFlatWith { tag: Proxy @"tag" } "Sample"
+codecSampleFlat ∷ FlatEncoding "tag" → JsonCodec SampleFlat
+codecSampleFlat encoding = sumFlatWith encoding "Sample"
   { "FlatFoo": unit
   , "FlatBar": CR.record { errors: C.int }
   , "FlatBaz": CR.record
@@ -146,6 +145,7 @@ main = do
           , valuesKey: "customValues"
           , omitEmptyArguments: false
           , unwrapSingleArguments: false
+          , mapTag: identity
           }
 
       check
@@ -192,6 +192,7 @@ main = do
           , valuesKey: "values"
           , omitEmptyArguments: true
           , unwrapSingleArguments: false
+          , mapTag: identity
           }
 
       check
@@ -237,6 +238,7 @@ main = do
           , valuesKey: "values"
           , omitEmptyArguments: false
           , unwrapSingleArguments: true
+          , mapTag: identity
           }
 
       check
@@ -273,6 +275,51 @@ main = do
             , "}"
             ]
 
+    log "    - Option: mapTag"
+    do
+      let
+        opts = EncodeTagged
+          { tagKey: "tag"
+          , valuesKey: "values"
+          , omitEmptyArguments: false
+          , unwrapSingleArguments: true
+          , mapTag: Str.toLower
+          }
+
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"foo\","
+            , "  \"values\": []"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"bar\","
+            , "  \"values\": 42"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"baz\","
+            , "  \"values\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
   log "  - EncodeNested"
   do
     log "    - default"
@@ -280,6 +327,7 @@ main = do
       let
         opts = EncodeNested
           { unwrapSingleArguments: false
+          , mapTag: identity
           }
 
       check
@@ -320,6 +368,7 @@ main = do
       let
         opts = EncodeNested
           { unwrapSingleArguments: true
+          , mapTag: identity
           }
 
       check
@@ -353,18 +402,64 @@ main = do
             , "}"
             ]
 
+    log "    - Option: mapTag"
+    do
+      let
+        opts = EncodeNested
+          { unwrapSingleArguments: true
+          , mapTag: Str.toLower
+          }
+
+      check
+        (codecSample opts)
+        Foo
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"foo\": []"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Bar 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"bar\": 42"
+            , "}"
+            ]
+
+      check
+        (codecSample opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"baz\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
   quickCheck (propCodec arbitrary (codecSample defaultEncoding))
 
   log "Check sum flat"
   do
-    check codecSampleFlat FlatFoo
+    log "  - Custom tag"
+    let
+      opts =
+        { tag: Proxy @"tag"
+        , mapTag: identity
+        }
+
+    check (codecSampleFlat opts) FlatFoo
       $ Str.joinWith "\n"
           [ "{"
           , "  \"tag\": \"FlatFoo\""
           , "}"
           ]
 
-    check codecSampleFlat (FlatBar { errors: 42 })
+    check (codecSampleFlat opts) (FlatBar { errors: 42 })
       $ Str.joinWith "\n"
           [ "{"
           , "  \"tag\": \"FlatBar\","
@@ -372,7 +467,7 @@ main = do
           , "}"
           ]
 
-    check codecSampleFlat (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
+    check (codecSampleFlat opts) (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
       $ Str.joinWith "\n"
           [ "{"
           , "  \"tag\": \"FlatBaz\","
@@ -385,5 +480,41 @@ main = do
           , "}"
           ]
 
-    quickCheck (propCodec arbitrary codecSampleFlat)
+  do
+    log "  - mapTag"
+    let
+      opts =
+        { tag: Proxy @"tag"
+        , mapTag: Str.toLower
+        }
+
+    check (codecSampleFlat opts) FlatFoo
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"flatfoo\""
+          , "}"
+          ]
+
+    check (codecSampleFlat opts) (FlatBar { errors: 42 })
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"flatbar\","
+          , "  \"errors\": 42"
+          , "}"
+          ]
+
+    check (codecSampleFlat opts) (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"flatbaz\","
+          , "  \"active\": true,"
+          , "  \"name\": \"hello\","
+          , "  \"pos\": {"
+          , "    \"x\": 42,"
+          , "    \"y\": 42"
+          , "  }"
+          , "}"
+          ]
+
+    quickCheck (propCodec arbitrary (codecSampleFlat opts))
 
