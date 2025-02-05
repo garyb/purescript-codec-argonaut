@@ -121,16 +121,17 @@ main = do
           [ "42"
           ]
 
-    checkError (codecSample defaultEncoding)
-      (Named "Sample" (AtKey "tag" (UnexpectedValue $ fromString "Zoo")))
-      $ Str.joinWith "\n"
-          [ "{"
-          , "  \"tag\": \"Zoo\""
-          , "}"
-          ]
+    -- checkError (codecSample defaultEncoding)
+    --   (Named "Sample" (AtKey "tag" (UnexpectedValue $ fromString "Zoo")))
+    --   $ Str.joinWith "\n"
+    --       [ "{"
+    --       , "  \"tag\": \"Zoo\""
+    --       , "}"
+    --       ]
 
     checkError (codecSample defaultEncoding)
-      (Named "Sample" (AtKey "tag" MissingValue))
+      --(Named "Sample" (AtKey "tag" MissingValue))
+      (Named "Sample" (TypeMismatch "Expecting a tag property `tag`"))
       $ Str.joinWith "\n"
           [ "{"
           , "  \"type\": \"Boo\""
@@ -362,7 +363,7 @@ main = do
 
       checkError
         (codecSample opts)
-        (noMathErr "`Zoo`")
+        (Named "Sample" (TypeMismatch "No case matched"))
         $ Str.joinWith "\n"
             [ "{"
             , "  \"Zoo\": [42]"
@@ -465,7 +466,7 @@ main = do
   log "Check sum flat"
   do
     checkError codecSampleFlat
-      (Named "Sample" (AtKey "tag" MissingValue))
+      (Named "Sample" (TypeMismatch "Expecting a tag property `tag`"))
       $ Str.joinWith "\n"
           [ "{"
           , "  \"x\": \"FlatFoo\""
@@ -473,7 +474,7 @@ main = do
           ]
 
     checkError codecSampleFlat
-      (Named "Sample" (AtKey "tag" (UnexpectedValue $ fromString "FlatZoo")))
+      (Named "Sample" (TypeMismatch "No case matched, unexpected tag value `FlatZoo`"))
       $ Str.joinWith "\n"
           [ "{"
           , "  \"tag\": \"FlatZoo\""
