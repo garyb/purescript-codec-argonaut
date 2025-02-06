@@ -3,14 +3,15 @@ module Test.Sum where
 import Prelude
 
 import Control.Monad.Error.Class (liftEither)
-import Data.Argonaut.Core (stringifyWithIndent)
+import Data.Argonaut.Core (stringify, stringifyWithIndent)
 import Data.Argonaut.Decode (parseJson)
 import Data.Bifunctor (lmap)
 import Data.Codec (decode, encode)
-import Data.Codec.Argonaut (JsonCodec)
+import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..))
 import Data.Codec.Argonaut as C
 import Data.Codec.Argonaut.Record as CR
 import Data.Codec.Argonaut.Sum (Encoding(..), FlatEncoding, defaultEncoding, sumFlatWith, sumWith)
+import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
 import Data.String as Str
@@ -86,14 +87,23 @@ check ∷ ∀ a. Show a ⇒ Eq a ⇒ JsonCodec a → a → String → Effect Uni
 check codec val expectEncoded = do
   let encodedStr = stringifyWithIndent 2 $ encode codec val
   when (encodedStr /= expectEncoded) $
-    throw ("check failed, expected: " <> expectEncoded <> ", got: " <> encodedStr)
+    throw ("encode check failed, expected: " <> expectEncoded <> ", got: " <> encodedStr)
 
   json ← liftEither $ lmap (show >>> error) $ parseJson encodedStr
 
-  decoded ← liftEither $ lmap (show >>> error) $ decode codec json
+  decoded ← liftEither $ lmap (\err → error ("decode failed: " <> show err <> " JSON was: " <> stringify json)) $ decode codec json
 
   when (decoded /= val) $
-    throw ("check failed, expected: " <> show val <> ", got: " <> show decoded)
+    throw ("decode check failed, expected: " <> show val <> ", got: " <> show decoded)
+
+checkFailure ∷ ∀ a. Show a ⇒ Eq a ⇒ JsonCodec a → JsonDecodeError → String → Effect Unit
+checkFailure codec err encodedStr = do
+  json ← liftEither $ lmap (show >>> error) $ parseJson encodedStr
+
+  let result = decode codec json
+
+  when (result /= Left err) $
+    throw ("decode check failed, expected: " <> show err <> ", got: " <> show result)
 
 main ∷ Effect Unit
 main = do
@@ -181,6 +191,27 @@ main = do
             , "    \"hello\","
             , "    42"
             , "  ]"
+            , "}"
+            ]
+
+      checkFailure
+        (codecSample opts)
+        (Named "Sample" (TypeMismatch "Expecting at least one element"))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"customTag\": \"Baz\","
+            , "  \"customValues\": ["
+            , "    true"
+            , "  ]"
+            , "}"
+            ]
+
+      checkFailure
+        (codecSample opts)
+        (Named "Sample" (TypeMismatch "No case matched"))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"customTag\": \"Qux\""
             , "}"
             ]
 
@@ -363,6 +394,26 @@ main = do
             , "}"
             ]
 
+      checkFailure
+        (codecSample opts)
+        (Named "Sample" (TypeMismatch "Expecting at least one element"))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Baz\": ["
+            , "    true"
+            , "  ]"
+            , "}"
+            ]
+
+      checkFailure
+        (codecSample opts)
+        (Named "Sample" (TypeMismatch "No case matched"))
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"Qux\": []"
+            , "}"
+            ]
+
     log "    - Option: Unwrap single arguments"
     do
       let
@@ -480,6 +531,26 @@ main = do
           , "}"
           ]
 
+    checkFailure
+      (codecSampleFlat opts)
+      (Named "Sample" (Named "case FlatBaz" (AtKey "pos" MissingValue)))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatBaz\","
+          , "  \"active\": true"
+          , "}"
+          ]
+
+    checkFailure
+      (codecSampleFlat opts)
+      (Named "Sample" (TypeMismatch "No case matched"))
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"FlatQux\""
+          , "}"
+          ]
+
+    quickCheck (propCodec arbitrary $ codecSampleFlat opts)
   do
     log "  - mapTag"
     let
