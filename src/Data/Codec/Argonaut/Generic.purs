@@ -70,11 +70,12 @@ instance nullarySumCodecCtor ∷ IsSymbol name ⇒ NullarySumCodec (Constructor 
       tagRaw = reflectSymbol (Proxy ∷ Proxy name)
       tag = encoding.mapTag tagRaw
     in
-      J.fromString $ tag
+      J.fromString tag
   nullarySumDecode encoding name j = do
-    tagRaw ← note (CA.Named name (CA.TypeMismatch "String")) (J.toString j)
-    let tag = encoding.mapTag tagRaw
-    if tag /= reflectSymbol (Proxy ∷ Proxy name) then
+    actualTag ← note (CA.Named name (CA.TypeMismatch "String")) (J.toString j)
+    let expectedTagRaw = reflectSymbol (Proxy ∷ Proxy name)
+    let expectedTag = encoding.mapTag expectedTagRaw
+    if expectedTag /= actualTag then
       Left (CA.Named name (CA.UnexpectedValue j))
     else
       Right (Constructor NoArguments)
