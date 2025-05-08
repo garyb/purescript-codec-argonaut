@@ -10,7 +10,7 @@ import Data.Codec (decode, encode)
 import Data.Codec.Argonaut (JsonCodec, JsonDecodeError(..))
 import Data.Codec.Argonaut as C
 import Data.Codec.Argonaut.Record as CR
-import Data.Codec.Argonaut.Sum (Encoding(..), FlatEncoding, defaultEncoding, sumFlatWith, sumWith)
+import Data.Codec.Argonaut.Sum (Encoding(..), FlatEncoding, defaultEncoding, sumFlatWith, sumFlatWith', sumWith, sumWith')
 import Data.Either (Either(..))
 import Data.Generic.Rep (class Generic)
 import Data.Show.Generic (genericShow)
@@ -47,6 +47,17 @@ codecSample encoding = sumWith encoding "Sample"
   , "Baz": C.boolean /\ C.string /\ C.int
   }
 
+codecSample' ∷ Encoding → JsonCodec Sample
+codecSample' encoding = sumWith' encoding "Sample"
+  { "Foo": const "_Foo"
+  , "Bar": const "_Bar"
+  , "Baz": const "_Baz"
+  }
+  { "Foo": unit
+  , "Bar": C.int
+  , "Baz": C.boolean /\ C.string /\ C.int
+  }
+
 --------------------------------------------------------------------------------
 
 data SampleFlat
@@ -69,6 +80,24 @@ instance Show SampleFlat where
 
 codecSampleFlat ∷ FlatEncoding "tag" → JsonCodec SampleFlat
 codecSampleFlat encoding = sumFlatWith encoding "Sample"
+  { "FlatFoo": unit
+  , "FlatBar": CR.record { errors: C.int }
+  , "FlatBaz": CR.record
+      { active: C.boolean
+      , name: C.string
+      , pos: CR.object "Pos"
+          { x: C.int
+          , y: C.int
+          }
+      }
+  }
+
+codecSampleFlat' ∷ FlatEncoding "tag" → JsonCodec SampleFlat
+codecSampleFlat' encoding = sumFlatWith' encoding "Sample"
+  { "FlatFoo": const "_Foo"
+  , "FlatBar": const "_Bar"
+  , "FlatBaz": const "_Baz"
+  }
   { "FlatFoo": unit
   , "FlatBar": CR.record { errors: C.int }
   , "FlatBaz": CR.record
@@ -351,6 +380,21 @@ main = do
             , "}"
             ]
 
+      log "    - with TagsMap"
+      check
+        (codecSample' opts)
+        (Baz true "hello" 42)
+        $ Str.joinWith "\n"
+            [ "{"
+            , "  \"tag\": \"_baz\","
+            , "  \"values\": ["
+            , "    true,"
+            , "    \"hello\","
+            , "    42"
+            , "  ]"
+            , "}"
+            ]
+
   log "  - EncodeNested"
   do
     log "    - default"
@@ -587,5 +631,19 @@ main = do
           , "}"
           ]
 
-    quickCheck (propCodec arbitrary (codecSampleFlat opts))
+    log "  - with TagsMap"
 
+    check (codecSampleFlat' opts) (FlatBaz { active: true, name: "hello", pos: { x: 42, y: 42 } })
+      $ Str.joinWith "\n"
+          [ "{"
+          , "  \"tag\": \"_baz\","
+          , "  \"active\": true,"
+          , "  \"name\": \"hello\","
+          , "  \"pos\": {"
+          , "    \"x\": 42,"
+          , "    \"y\": 42"
+          , "  }"
+          , "}"
+          ]
+
+    quickCheck (propCodec arbitrary (codecSampleFlat opts))
