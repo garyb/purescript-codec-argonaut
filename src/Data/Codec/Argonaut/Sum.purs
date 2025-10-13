@@ -26,7 +26,7 @@ module Data.Codec.Argonaut.Sum
 import Prelude
 
 import Data.Argonaut.Core (Json)
-import Data.Argonaut.Core (Json, fromString, jsonEmptyObject) as J
+import Data.Argonaut.Core (Json, fromString) as J
 import Data.Array as Array
 import Data.Bifunctor (bimap, lmap)
 import Data.Codec as Codec
